@@ -1,0 +1,4 @@
+body { font-family: Georgia, serif; line-height: 1.6; margin: 1em; }
+h1 { page-break-before: always; }
+h2 { margin-top: 2em; }
+blockquote { margin-left: 2em; font-style: italic; }
