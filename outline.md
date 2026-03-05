@@ -236,6 +236,27 @@ Entities, relationships, and the critical point that a relationship isn't just a
 
 An edge without a type is nearly useless. Knowing that a drug and a disease are *connected* tells you almost nothing; knowing that the drug *treats* the disease, or *causes* it, or *is contraindicated in* patients with it, tells you something actionable. The meaning of the edge is the knowledge. The edge itself is just the plumbing.
 
+```
+  ┌───────────┐                   ┌───────────┐
+  │           │                   │           │
+  │     X     ├──────────────────>│     Y     │
+  │           │                   │           │
+  └───────────┘                   └───────────┘
+```
+
+An edge with no label or metadata tells us very little, just that two things are connected in
+some way.
+
+```
+  ┌───────────┐                   ┌───────────┐
+  │           │   Traveling       │           │
+  │   Here    ├──────────────────>│   There   │
+  │           │                   │           │
+  └───────────┘                   └───────────┘
+```
+
+Even a simple label on an edge gives us a more engaging narrative.
+
 Software engineers will recognize this intuition from type systems. An untyped variable that could hold anything is harder to reason about than one whose type tells you what operations are valid on it and what guarantees it carries. The same principle applies to edges in a knowledge graph: a typed relationship isn't just a label, it's a contract. It tells you what the subject and object are allowed to be, what direction the relationship runs, and what it means to assert it. A graph with well-typed edges is one that can catch its own errors -- an "inhibits" edge between two diseases, for instance, is probably a mistake, and a schema that defines valid subject and object types for each predicate will surface that mistake rather than silently incorporate it.
 
 This seems obvious stated plainly, but it has consequences that are easy to underestimate during schema design. The temptation -- especially early, when you're trying to get extraction working at all -- is to start with a small number of generic relationship types and plan to refine them later. "Associated with" is the classic offender: it's easy to extract, it's never wrong, and it's almost never useful. A graph full of "associated with" edges is a graph that can support retrieval but not reasoning.
