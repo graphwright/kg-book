@@ -236,26 +236,14 @@ Entities, relationships, and the critical point that a relationship isn't just a
 
 An edge without a type is nearly useless. Knowing that a drug and a disease are *connected* tells you almost nothing; knowing that the drug *treats* the disease, or *causes* it, or *is contraindicated in* patients with it, tells you something actionable. The meaning of the edge is the knowledge. The edge itself is just the plumbing.
 
-```
-  ┌───────────┐                   ┌───────────┐
-  │           │                   │           │
-  │     X     ├──────────────────>│     Y     │
-  │           │                   │           │
-  └───────────┘                   └───────────┘
-```
+![](link_without_metadata.svg)
 
 An edge with no label or metadata tells us very little, just that two things are connected in
 some way.
 
-```
-  ┌───────────┐                   ┌───────────┐
-  │           │   Traveling       │           │
-  │   Here    ├──────────────────>│   There   │
-  │           │                   │           │
-  └───────────┘                   └───────────┘
-```
+![](link_with_metadata.svg)
 
-Even a simple label on an edge gives us a more engaging narrative.
+Even a very simple label on an edge gives us a more engaging narrative.
 
 Software engineers will recognize this intuition from type systems. An untyped variable that could hold anything is harder to reason about than one whose type tells you what operations are valid on it and what guarantees it carries. The same principle applies to edges in a knowledge graph: a typed relationship isn't just a label, it's a contract. It tells you what the subject and object are allowed to be, what direction the relationship runs, and what it means to assert it. A graph with well-typed edges is one that can catch its own errors -- an "inhibits" edge between two diseases, for instance, is probably a mistake, and a schema that defines valid subject and object types for each predicate will surface that mistake rather than silently incorporate it.
 
@@ -281,17 +269,39 @@ A graph without provenance is a collection of claims with no way to evaluate the
 
 Canonical identity as a first-class concern, not an implementation detail. Identity is hard and consequential, being introduced at the level of abstraction appropriate for a chapter that's defining what a knowledge graph is. It's non-trivial, and treating it as an afterthought is a mistake. A graph where "BRCA1," "breast cancer gene 1," and "BRCA1 protein" are three separate nodes isn't a knowledge graph -- it's an index.
 
+But the stakes go deeper than deduplication. Canonical identity doesn't just help you say that two things are the same. It places those things within the body of human knowledge. The identifiers that matter -- UMLS CUI for medical concepts, Gene Ontology terms for molecular function, DBPedia URIs for cross-domain entities -- come from accepted authoritative ontologies. They are maintained by communities of experts, revised through consensus, and trusted precisely because they represent the accumulated judgment of the field. When you assign a canonical ID to an entity, you are not merely collapsing synonyms. You are connecting that entity to the history of human thought as far as that entity is concerned: its definition, its place in the taxonomy, its relationships to other concepts that the community has already established and agreed upon. A knowledge graph built on canonical IDs is not just a graph of facts -- it is a graph that inherits the epistemic authority of the ontologies it anchors to. That inheritance is what makes the graph trustworthy across sources, across time, and across the boundary between human expertise and machine reasoning.
+
 ### What a KG Is Good For
 
-Querying, traversal, hypothesis generation, LLM grounding.
+**Querying.** A knowledge graph supports structured queries over entities and relationships in ways that free-text search and document stores cannot. You can ask "what drugs treat this disease?" or "what genes are implicated in this pathway?" and get answers that are aggregated across sources, deduplicated, and typed. The query is over the structure of the domain, not over the surface form of the text. That distinction matters: a search engine returns documents that might contain the answer; a knowledge graph returns the answer, with provenance pointing back to the documents that support it.
+
+**Traversal.** The graph structure enables path-finding and multi-hop reasoning. You can ask not just "what does A connect to?" but "how is A related to B?" -- and the graph can return paths that span multiple edges and intermediate entities. Those paths often reveal connections that no single source states explicitly: the drug and the disease might never appear together in one paper, but the graph can connect them through shared targets, shared pathways, or shared mechanisms. Traversal is what turns a collection of facts into a navigable map of a domain.
+
+**Hypothesis generation.** Because the graph makes structure explicit, it surfaces patterns that weren't in the original sources. Drug repurposing -- finding that a drug approved for one indication might work for another -- often starts with noticing that two diseases share a mechanism, a target, or a pathway. A graph that connects drugs, targets, diseases, and mechanisms can suggest those connections. So can a human expert with years of training; the graph can do it systematically, at scale, and in a form that can be checked. The hypotheses still require validation -- the graph proposes, it doesn't prove -- but it narrows the search space from "everything we might try" to "things that are structurally plausible."
+
+**LLM grounding.** A large language model reasoning from its training distribution has no way to distinguish what it actually knows from what it has statistically absorbed. Give it a knowledge graph to reason over, and the task changes: the model retrieves relevant subgraphs, synthesizes them, and produces answers that are grounded in explicit, provenance-tracked claims. The model's role shifts from "remember and generate" to "retrieve and synthesize." That shift reduces hallucination, makes the reasoning traceable, and gives downstream users something to audit. We return to this in Chapter 4; for now, the point is that grounding is not a minor application of knowledge graphs but one of their primary use cases in the current AI landscape.
 
 ### Build vs. Buy
 
-Why someone would build their own rather than use Wikidata, SPOKE, ROBOKOP, or a commercial offering. The cases where existing graphs are sufficient, and the cases -- novel domains, proprietary corpora, custom schemas, provenance requirements -- where they aren't. An honest accounting rather than a sales pitch for the approach in this book.
+The landscape of existing knowledge graphs is richer than it used to be. Wikidata offers broad coverage across many domains, with community curation and a flexible schema. Domain-specific graphs like SPOKE (drug-disease-gene) and ROBOKOP (pharmacogenomics) provide biomedical structure that general-purpose graphs don't. Commercial offerings from publishers, vendors, and platform providers add proprietary value and integration. The question is not whether knowledge graphs exist -- they do -- but whether one of them fits your problem.
+
+**When existing graphs are sufficient.** If your domain is well-covered, your schema aligns with what the graph provides, and you don't need provenance that traces back to your own corpus, an existing graph may be the right choice. You get coverage, maintenance by someone else, and a shorter path to value. The tradeoff is that you inherit someone else's design decisions: their entity types, their relationship vocabulary, their choices about what to include and what to leave out. If those align with your use case, that's fine. If they don't, you'll spend time working around them.
+
+**When you need to build.** Several situations push you toward building your own. *Novel domains* -- legal documents, niche scientific subfields, internal corporate knowledge -- often have no suitable public graph. *Proprietary corpora* matter when the knowledge you care about lives in documents you control: internal reports, unpublished studies, patient records, contracts. No public graph will have extracted from those. *Custom schemas* matter when the relationship types and entity distinctions that matter for your reasoning don't match what existing graphs provide. "Treats" and "associated with" are not interchangeable for a clinical decision support system. *Provenance requirements* matter when you need to trace every claim back to a specific source passage, with confidence and evidence type. Many public graphs aggregate without preserving that level of traceability. Building is not always the answer -- but when one or more of these conditions holds, buying often isn't either.
+
+**An honest accounting.** This book is about building. It would be dishonest to pretend that building is always the right choice, or that the approach here is the only one. The goal is to give you the tools to make the tradeoff consciously: to know what you gain by building, what you give up, and when the calculus favors one path over the other.
 
 ### What a KG Is Not Good For
 
-Honest accounting: KGs reflect the quality and coverage of their sources. They require maintenance. They can encode bias at scale.
+A knowledge graph is a powerful tool for certain kinds of reasoning. It is not a general-purpose solution, and overclaiming its virtues does the field no favors.
+
+**Quality reflects sources.** A knowledge graph encodes what is in its sources. If the sources are biased, incomplete, or wrong, the graph will be too. Extraction can introduce additional errors -- misclassified relationships, wrong entity resolutions, spurious connections -- but the ceiling is set by the corpus. A graph built from low-quality literature will not magically produce high-quality knowledge. Garbage in, garbage out applies with full force.
+
+**Coverage gaps are structural.** A graph can only represent what has been extracted. If a domain is under-studied, or if the important relationships are stated in ways the extractor doesn't recognize, the graph will have holes. Those holes are not always obvious: absence of an edge can mean "no relationship" or "we haven't seen it yet." Reasoning over an incomplete graph can produce false negatives -- "the graph doesn't show a connection" is not the same as "no connection exists." Users need to understand the difference.
+
+**Maintenance is ongoing.** Knowledge decays. New papers are published, consensus shifts, drugs are approved or withdrawn, mechanisms are revised. A static graph becomes stale. Keeping it current requires continuous ingestion, schema evolution as the domain evolves, and curation to correct extraction errors and resolve conflicts. This is not a one-time build; it's an ongoing commitment. Organizations that treat a knowledge graph as a project rather than a product often find that the graph drifts out of usefulness within a year or two.
+
+**Bias encodes at scale.** The literature in many domains reflects historical and structural biases: which diseases get studied, which populations are represented in trials, which research questions receive funding. A graph extracted from that literature inherits those biases. Worse, the graph can amplify them -- a pattern that appears in many papers becomes many edges, which makes it look more established than a pattern that appears in few. A knowledge graph is not neutral. It reflects the priorities and blind spots of its sources, and those need to be understood and, where possible, corrected.
 
 ---
 
