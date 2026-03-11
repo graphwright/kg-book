@@ -574,6 +574,8 @@ Schema choices that make LLM extraction easier versus harder. Relationship types
 
 Your schema will change. New entity types you didn't anticipate, relationship types that turn out to be too coarse, distinctions that turn out to matter more than you thought. How to design in a way that doesn't make schema evolution catastrophic. Versioning, migration, and the argument for keeping the schema as simple as possible for as long as possible.
 
+A single source of truth for domain specifics pays off here. When entity types, predicates, and prompt instructions live in one module, you change one place and the extraction prompt, validation logic, and deduplication rules all stay in sync. Splitting them across YAML configs, Python code, and prompt templates invites drift: you add an entity type in one file and forget to update the prompt, or you tighten a predicate constraint and the dedup stage still uses the old rules. One module, one edit, no drift.
+
 # Part III: Building It
 
 The next few chapters describe work done on a particular project. You should regard this as advice, not as a recipe or specification that you must follow, but rather as a checklist of things worth considering. The approaches suggested here might meet your needs, they might not. Thinking about them will help you reason through the details of your own design.
