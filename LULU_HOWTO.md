@@ -122,11 +122,13 @@ You need:
 1. A `.bib` file, e.g. `references.bib`:
 
    ```bibtex
-   @book{minsky1975,
-     author = {Minsky, Marvin},
-     title = {A Framework for Representing Knowledge},
-     year = {1975},
-     ...
+   @techreport{minsky1974framework,
+     author      = {Minsky, Marvin},
+     title       = {A Framework for Representing Knowledge},
+     institution = {Massachusetts Institute of Technology},
+     address     = {Cambridge, MA, USA},
+     year        = {1974},
+     number      = {AIM-306}
    }
    ```
 
