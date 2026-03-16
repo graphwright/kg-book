@@ -742,6 +742,31 @@ The cache should be persistent across pipeline runs. A run that processes docume
 
 Cache invalidation is the classic hard problem. Authorities update: new drugs get added to RxNorm, disease classifications change in UMLS. If your cache never updates, you'll eventually have stale mappings. A practical approach: cache with a timestamp or version, and periodically refresh entries that are older than a threshold. Or accept that the cache is eventually consistent and that a full pipeline rerun will correct any drift. The right choice depends on how often your authorities change and how critical freshness is for your use case.
 
+### The Identity Server
+
+The concepts in this chapter -- authority lookup, provisional entities, promotion, synonym detection, merge -- can each be implemented ad hoc, scattered across pipeline scripts and ingestion workers. That works at small scale. At larger scale, with multiple concurrent workers and multiple server replicas ingesting in parallel, the lack of a single authoritative component creates race conditions: two workers independently resolve the same mention and create two provisional entities instead of one; a promotion check runs on a stale snapshot and promotes twice; a synonym merge races against a concurrent insert.
+
+One approach worth considering is to consolidate all entity-identity decisions into a single abstract component: the **identity server**. The design described here is promising and worth exploring, but has not yet been thoroughly tested in production. Its interface has five operations:
+
+- **`resolve(mention, context) → entity_id`** -- Map a surface form to an entity ID. Performs authority lookup, returns a canonical ID if one is found, otherwise creates and returns a provisional ID. Idempotent: resolving the same mention twice returns the same ID.
+- **`promote(provisional_id) → entity_id`** -- Attempt to elevate a provisional entity to canonical status using the domain's promotion policy. No-op if already canonical.
+- **`find_synonyms(entity_id) → [entity_id]`** -- Return IDs of entities considered synonymous with the given entity, using cosine similarity, shared external identifiers, or string normalization. Read-only; does not merge.
+- **`merge(entity_ids, survivor_id) → entity_id`** -- Collapse a set of entities into a single survivor. All references -- relationships, mentions, bundle edges -- are redirected to the survivor. Absorbed entities are marked `MERGED` (not deleted), with a `merged_into` pointer so stale external references remain resolvable. Status rules: if any participant is canonical, the survivor stays canonical; otherwise it stays provisional.
+- **`on_entity_added(entity_id, context)`** -- Event hook fired after an entity insert. Triggers synonym detection and, if candidates are found, calls `merge`. This event-driven model subsumes batch synonym sweeps.
+
+The interface is an ABC (abstract base class), keeping the domain logic independent of any particular storage backend. The reference implementation is Postgres-backed:
+
+- **`resolve`** uses `INSERT ... ON CONFLICT DO NOTHING` so concurrent workers serialise naturally without an explicit lock.
+- **`promote`** uses `SELECT FOR UPDATE` to lock the row before checking and updating, preventing double-promotion.
+- **`merge`** acquires a Postgres advisory lock keyed on the sorted set of entity IDs, preventing two workers from merging the same pair in opposite orders.
+- **`on_entity_added`** is called inside the same transaction as the entity insert, so synonym detection fires only after the row is durably visible -- eliminating the race where two concurrent workers each see the other as a merge candidate before either has fully committed.
+
+Authority-lookup results are cached in Redis, shared across replicas. Cache keys are versioned by authority source (e.g. `resolve:umls:v2026.01:{mention}`) so a new release can be handled by key rotation. Negative results -- mentions confirmed to have no canonical match -- are also cached, with a shorter TTL, preventing repeated API calls for genuinely novel entities.
+
+Survivor selection during merge is domain-pluggable: `DomainSchema` declares an abstract `preferred_entity` method that receives the synonym candidates and returns the preferred survivor. Medical domains, for example, prefer canonical entities over provisional, then entities with authoritative external IDs (UMLS, HGNC), then higher usage count, then earlier creation date. This keeps survivor policy fully in domain hands rather than baked into the identity server.
+
+The identity server is the engineering realization of the design decisions described earlier in this chapter. It is where "treat canonical IDs as primary keys" and "cache aggressively" and "provisional entities are first-class" stop being principles and become code.
+
 ## Chapter 12: Provenance and Trust
 
 `\chaptermark{Provenance and Trust}`{=latex}
