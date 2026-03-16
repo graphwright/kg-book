@@ -3,9 +3,10 @@
 \idxlayout{columns=2, columnsep=2em}
 \makeindex
 
-% Give the bibliography a page break and an unnumbered chapter heading
+% Give the bibliography a page break at the top-level (part) heading level
 \AtBeginEnvironment{CSLReferences}{%
+  \backmatter
   \clearpage
-  \chapter*{References}
-  \addcontentsline{toc}{chapter}{References}
+  \part*{References}
+  \addcontentsline{toc}{part}{References}
 }
