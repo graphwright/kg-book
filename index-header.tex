@@ -1,2 +1,11 @@
 \usepackage{makeidx}
+\usepackage{idxlayout}
+\idxlayout{columns=2, columnsep=2em}
 \makeindex
+
+% Give the bibliography a page break and an unnumbered chapter heading
+\AtBeginEnvironment{CSLReferences}{%
+  \clearpage
+  \chapter*{References}
+  \addcontentsline{toc}{chapter}{References}
+}

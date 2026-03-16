@@ -17,8 +17,8 @@ outline.epub: $(SRC) $(IMAGES)
 # Interior PDF for Lulu — no cover, xelatex for font embedding
 # Two-step: pandoc → LaTeX, then xelatex + makeindex + xelatex (makeindex needs a separate pass)
 outline.pdf: outline.tex $(IMAGES)
-	xelatex -interaction=nonstopmode outline.tex
-	-makeindex outline
+	xelatex -interaction=nonstopmode outline.tex || true
+	-makeindex -s index.ist outline
 	xelatex -interaction=nonstopmode outline.tex
 	xelatex -interaction=nonstopmode outline.tex
 
