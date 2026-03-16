@@ -264,12 +264,12 @@ Entities, relationships, and the critical point that a relationship isn't just a
 
 An edge without a type is nearly useless. Knowing that a drug and a disease are *connected* tells you almost nothing; knowing that the drug *treats* the disease, or *causes* it, or *is contraindicated in* patients with it, tells you something actionable. The meaning of the edge is the knowledge. The edge itself is just the plumbing.
 
-![](link_without_metadata.svg)
+![](link_without_metadata.pdf)
 
 An edge with no label or metadata tells us very little, just that two things are connected in
 some way.
 
-![](link_with_metadata.svg)
+![](link_with_metadata.pdf)
 
 Even a very simple label on an edge gives us a more engaging narrative.
 

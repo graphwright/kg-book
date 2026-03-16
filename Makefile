@@ -1,4 +1,5 @@
-IMAGES := $(wildcard *.png *.jpg *.jpeg *.svg)
+SVG_PDFS := $(patsubst %.svg,%.pdf,$(wildcard *.svg))
+IMAGES := $(wildcard *.png *.jpg *.jpeg) $(SVG_PDFS)
 PANDOC := pandoc
 SRC := outline.md
 
@@ -8,7 +9,11 @@ GEOMETRY := paperwidth=6in,paperheight=9in,top=0.75in,bottom=0.75in,inner=0.875i
 all: outline.epub outline.pdf cover.pdf
 
 clean:
-	rm -f outline.epub outline.pdf outline.tex outline.aux outline.idx outline.ind outline.ilg outline.log outline.out cover.pdf
+	rm -f outline.epub outline.pdf outline.tex outline.aux outline.idx outline.ind outline.ilg outline.log outline.out cover.pdf $(SVG_PDFS)
+
+# Convert SVG diagrams to PDF for xelatex (avoids shell-escape requirement)
+%.pdf: %.svg
+	inkscape --export-filename=$@ $<
 
 # epub still uses cover-image from YAML frontmatter
 outline.epub: $(SRC) $(IMAGES)
