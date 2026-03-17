@@ -665,8 +665,6 @@ A single source of truth for domain specifics pays off here. When entity types, 
 
 # Part III: Building It
 
-The next few chapters describe work done on a particular project. You should regard this as advice, not as a recipe or specification that you must follow, but rather as a checklist of things worth considering. The approaches suggested here might meet your needs, they might not. Thinking about them will help you reason through the details of your own design.
-
 ## Chapter 9: Diagnostic Tools
 
 `\chaptermark{Diagnostic Tools}`{=latex}
@@ -691,57 +689,68 @@ What can you learn from graph visualization as a diagnostic? Plenty. You can qui
 
 ![](MetadataView.png)
 
-Zoom, pan, and reset complete the interface. The goal is to make the graph inspectable -- to turn "does the pipeline work?" into a question you can answer by looking.
+Zoom, pan, and reset complete the interface. The goal is to make the graph inspectable -- to turn "does my ingestion process work?" into a question you can answer by looking.
 
-## Chapter 10: The Ingestion Pipeline
+## Chapter 10: Design Priorities
 
-`\chaptermark{The Ingestion Pipeline}`{=latex}
+`\chaptermark{Design Priorities}`{=latex}
 
-### Why Multiple Passes at All
+This chapter examines the design decisions that matter most before you start building — specifically around provenance, which is the one you're most likely to underinvest in and most painful to retrofit. The examples are drawn from my own project, a knowledge graph to capture the contents of medical papers. I call this project "kgraph" in its domain-agnostic form, and "medlit" is the extension of the knowledge graph into the domain of medical literature.
 
-The temptation is to do extraction end-to-end in one shot: send the document to the model, get back entities and relationships, done. That approach fails at scale for reasons that are worth stating explicitly. A single monolithic pass has a single point of failure -- if anything goes wrong, you restart from scratch. It produces output that is hard to debug, because you can't inspect intermediate states. And it conflates concerns that are better handled separately: entity extraction, identity resolution, relationship extraction, and assembly are different problems with different failure modes and different recovery strategies.
+These notes should be regarded not as a recipe or specification that you must follow, but rather as a checklist of things worth considering. The approach suggested here might meet your needs, it might not. Thinking about them will help you reason through the details of your own design.
 
-Staging the pipeline into multiple passes addresses all of this. Each pass has a well-defined input and output. Failures are recoverable: if Pass 2 fails on document 47, you fix the issue and rerun Pass 2 from document 47, not from document 1. Intermediate artifacts are inspectable -- you can look at the raw entity extractions before resolution, or the resolved entities before relationship extraction, and see exactly where the pipeline went wrong. The per-document bundle becomes the natural unit of work between passes: each document produces a bundle that can be validated, cached, and merged independently. None of this is medlit-specific. It's good pipeline design for any extraction problem at non-trivial scale.
+### Provenance
 
-The medlit pipeline uses a two-pass architecture: Pass 1 extracts entities and resolves them to canonical or provisional IDs; Pass 2 extracts relationships between those resolved entities. That ordering matters. You need a consistent entity vocabulary before you can reliably extract relationships -- "this drug treats this disease" is only useful if "this drug" and "this disease" have been resolved to the same nodes across the document. Other orderings are possible, but the principle holds: separate concerns, make each pass debuggable, design for partial failure and restart.
+Provenance is not equally important in every domain. Be honest with yourself about how much provenance infrastructure your domain actually requires before you build it.
 
-### Parsing: Getting to Text
+In medicine, the difference between "this drug inhibits this enzyme, from a single case report" and "this drug inhibits this enzyme, replicated across forty randomized controlled trials" is the difference between a hypothesis and a clinical fact. A clinician making a treatment decision needs to know which. A researcher generating hypotheses might care less about the evidence grade and more about the structural pattern. But for any application where the quality of the claim matters -- clinical decision support, regulatory submission, litigation -- provenance is not optional. You need to know where each relationship came from, what kind of study supported it, and how confident the extraction was.
 
-Whatever your source format, you need to get to structured text before you can extract anything. The model reads text; it doesn't read PDF layout or XML tags. JATS XML -- the format used by PubMed Central -- is medlit's case: a structured representation of journal articles with metadata, abstract, and body sections. Yours might be PDFs, HTML, EPUB, proprietary formats, or plain text that's already clean. The parser's job is to produce a document representation that preserves structure the extractor can use: section boundaries, paragraph boundaries, and the actual text content.
+In other domains, the bar is lower. A knowledge graph of theatrical productions -- which plays were performed where, when, by whom -- might be perfectly useful without tracing every edge to a specific source. If the graph says "Hamlet was performed at the Globe in 1601," you might care that it's correct, but you probably don't need a provenance record that distinguishes "extracted from a primary source" versus "extracted from a secondary source" versus "inferred from context." The graph is useful even if you can't trace every edge. Building elaborate provenance infrastructure for a domain that doesn't need it is over-engineering.
 
-Two decisions matter regardless of format. First, how do you identify section boundaries? In scientific papers, the distinction between Methods, Results, and Discussion carries semantic weight -- a claim in Results is different from a claim in Discussion. In legal documents, sections and subsections matter for citation. The parser should expose this structure so downstream passes can use it. Second, how do you chunk for extraction? Documents are often too long to send to the model in one call. Chunk too small and you lose context -- the referent of "it" or "the compound" may be in the previous chunk. Chunk too large and you exceed model context limits, dilute the signal, or hit token budgets that make the run expensive. Overlapping chunks can help: each sentence appears in at least one chunk, so no sentence is orphaned at a boundary. Sentence boundaries are a practical constraint worth respecting -- splitting mid-sentence produces fragments that are harder for the model to interpret correctly.
+The honest question: what will your users do with the graph? If they will make high-stakes decisions based on it, provenance matters. If they will use it for exploration, discovery, or casual reference, a lighter touch may suffice. Get that right before you invest in schema design and pipeline complexity.
 
-### Extraction: The LLM Pass
+When provenance does matter, it matters at an architectural level, not as an add-on. You can't retrofit provenance into a schema that didn't anticipate it without re-ingesting your corpus. The relationship model, the bundle structure, and the extraction prompts all need to capture provenance from the start. Think about it carefully before you build.
 
-This is where your schema meets the text. The extraction prompt is not a generic "extract entities and relationships" request. It is a binding of your entity types and relationship types to natural language, written so the model understands exactly what to look for. A good prompt names each entity type with a clear definition, lists each relationship type with its subject and object constraints, and instructs the model to capture provenance alongside content -- which passage, what hedging language, what confidence. The prompt is the place where domain expertise gets translated into extraction behavior. A clinician reviewing the prompt should be able to assess whether it matches their understanding of the domain.
+When it matters, it matters a lot. A relationship with provenance -- specific source document, section or passage, extraction method, confidence score, study design if applicable -- is evidence. Without provenance, a relationship in your graph is an assertion of unknown quality. You can't verify it. You can't weight it against conflicting claims. You can't explain to a user why the graph says what it says. You're left with "the graph says drug A treats disease B" and no way to assess whether that's a well-replicated finding or a single speculative mention.
 
-The tradeoff between prompt specificity and prompt flexibility is real. A highly specific prompt -- "extract only direct assertions, ignore speculative language, require explicit subject-verb-object structure" -- tends to produce higher precision and lower recall. The model extracts less, but what it extracts is more reliable. A more flexible prompt -- "extract any relationship that might be implied, include hedged claims" -- tends to produce higher recall and lower precision. You get more relationships, but more of them will need filtering or correction. There's no universal right answer. The right balance depends on your domain, your tolerance for noise, and what you're doing with the graph. Iteration over the prompt is the design method. You run extraction on a sample, inspect the output, adjust the prompt, repeat. There's no shortcut.
+Provenance is also what lets you audit extraction quality. When a relationship looks wrong, you need to trace it back: which document, which passage, what did the extractor see? That trace is how you find prompt bugs, schema ambiguities, and source documents that are genuinely ambiguous. Without it, you're debugging in the dark.
 
-### A Note on Vocabulary
+It's also how you debug pipeline regressions. If extraction quality drops after a prompt change, provenance lets you compare: what did the old pipeline produce for this document versus the new one? Which relationships disappeared, which appeared, which changed? Provenance turns "something got worse" into "here's exactly what changed and where."
 
-The medlit pipeline has an explicit vocabulary pass that runs alongside or after extraction. The idea: before you try to resolve "BRCA1," "breast cancer gene 1," and "BRCA1 protein" to the same entity, you establish a shared vocabulary of entity names and their variants. The vocabulary pass can use the same LLM that does extraction -- "given these entity mentions from the document, list the canonical names and aliases for each" -- or it can be a separate step that clusters mentions and assigns preferred forms. Not every domain needs this. If your corpus uses relatively consistent terminology, extraction may produce sufficiently normalized output without it. But if your domain has heavy terminology -- medicine, law, chemistry, any field where the same concept has many names and many names map to the same concept -- something like this will pay off. The vocabulary pass reduces the load on the deduplication and resolution stages downstream. It's a form of schema binding: you're telling the model, before relationship extraction, what the canonical forms are so it can use them consistently.
+And it's how you answer the question every serious user will eventually ask: "Why does the graph say this?" A graph that can't answer that question is a black box. A graph that can produce, for any relationship, the list of sources that support it, with enough detail to verify, is a tool you can trust.
 
-### Deduplication
+### Confidence as a Signal, Not a Guarantee
 
-The same entity extracted from many documents will appear under slightly different names. "Aspirin," "acetylsalicylic acid," "ASA," and "2-acetoxybenzoic acid" are one drug. "Type 2 diabetes," "T2DM," "diabetes mellitus type 2," and "adult-onset diabetes" are one disease. The deduplication stage groups mentions, resolves them to canonical forms, and handles the ambiguous cases. This is where the gap between "a list of extracted facts" and "a coherent graph" starts to close.
+LLMs can be prompted to produce confidence scores alongside their extractions. "How confident are you that this relationship holds, on a scale of 1 to 5?" The model will give you a number. That number is useful. It correlates with extraction quality: relationships the model is confident about tend to be more reliable than ones it's uncertain about. You can use it to filter, rank, or weight results. It's worth capturing.
 
-The details vary by domain. In medicine, authority lookup -- UMLS, RxNorm, HGNC, and the rest -- does much of the work: many apparent synonyms resolve to the same canonical ID automatically. What remains after authority lookup is the residue: novel entities, institution-specific abbreviations, terms that aren't in any vocabulary yet. For those, you need other signals. Embedding similarity can help: mentions that are semantically close in embedding space may be the same entity. So can co-occurrence: if "compound X" and "imatinib" appear in the same document and the context suggests they're the same, that's evidence. The hard cases are the ambiguous ones -- "ACE" could be angiotensin-converting enzyme or the gene, "CRF" could be corticotropin-releasing factor or chronic renal failure. Resolving those may require context, domain heuristics, or human review. The universal part: you need a deduplication strategy, and it should run before or alongside relationship extraction so that relationships reference resolved entities, not raw strings.
+It is not a calibrated probability. A model that says "90% confident" does not mean that 90% of such extractions will be correct. The model has no access to ground truth; it's producing a subjective assessment of its own certainty, which is a different thing. The scores are ordinal -- higher usually means more reliable -- but the mapping from score to actual accuracy is unknown and varies by domain, relationship type, and prompt.
 
-### Assembly
+The honest framing: confidence is one input to trust, not trust itself. A high-confidence extraction from a single case report is still weak evidence. A low-confidence extraction replicated across twenty randomized trials might be strong evidence. Confidence tells you something about the extraction process. Provenance tells you something about the underlying evidence. You need both, and you need to combine them with domain judgment rather than treating either as a sufficient statistic.
 
-Once you have per-document extractions -- entities resolved, relationships extracted -- you need to merge them into a coherent whole. Assembly is not just concatenation. When multiple documents assert the same relationship, that's meaningful signal. "Drug A treats Disease B" from one paper is weaker than "Drug A treats Disease B" from five independent papers. The assembly stage should aggregate evidence across sources: one relationship record with a provenance list, not five duplicate edges. That aggregation is what makes the graph useful for reasoning -- you can weight relationships by how many sources support them, filter by evidence type, and detect when sources conflict.
+### Multi-Source Relationships
 
-The structure of the final bundle is worth thinking about carefully before you start. What does a "document" in your graph look like? Is it a node with metadata and outgoing edges to the relationships it supports? Are relationships first-class with document references, or are documents first-class with relationship references? The choice affects query patterns, provenance traversal, and how you handle updates when you re-ingest a document with corrections. Changing the bundle structure later, once you have data and downstream consumers, is expensive. Get it right early.
+When multiple independent sources assert the same relationship, that's meaningful signal. "Drug A inhibits enzyme B" from one paper is a datum. "Drug A inhibits enzyme B" from five papers, each with different authors, methods, and populations, is a finding. The replication across sources is evidence that the relationship is robust, not an artifact of one study's design or one extraction's error.
 
-### Progress Tracking and Resumability
+Designing your data model to aggregate evidence across sources -- rather than storing one relationship record per source -- is worth the extra complexity if your corpus is large enough that the same relationship will appear many times. Instead of five edges from document A, B, C, D, and E, you have one edge with a provenance list of five sources. That aggregation enables queries like "how many sources support this relationship?" and "what's the evidence grade for this claim?" It also keeps the graph from exploding in size: the number of unique relationships in a domain is much smaller than the number of relationship mentions across documents.
 
-Large ingestion runs fail partway through. A run over 100,000 documents will hit rate limits, network timeouts, model outages, or your own mistakes. If the pipeline has no notion of progress, you restart from zero every time. That's acceptable for a research prototype. It's not acceptable for something you run regularly.
+The aggregation logic needs to handle nuance. Two papers from the same author group might not be independent; you might want to weight them differently than two papers from unrelated labs. A paper that retracts a finding should reduce the evidence count, not leave a stale relationship in place. A paper that asserts the opposite -- "drug A does not inhibit enzyme B" -- creates a conflict that your model should represent rather than silently merging. These are design choices that depend on your domain and how you plan to use the graph.
 
-Design for restartability from the beginning. Each document should have a processing status: not started, in progress, completed, failed. The pipeline should record which documents have been fully processed and which haven't. On restart, it should skip completed documents and resume from the first incomplete one. Checkpointing within a document -- if a single document requires multiple LLM calls, record which chunks have been processed -- can help for very long documents, though the document is usually the right granularity. The progress store should be persistent and survive process restarts. This isn't glamorous work. It's the difference between a pipeline you can run once as a demo and a pipeline you can run every week as part of your workflow.
+### Provenance at Query Time
 
-## Chapter 11: Identity and Canonicalization
+The point of capturing provenance is being able to use it. A graph server that can answer "what's the evidence for this relationship?" rather than just "does this relationship exist?" is a qualitatively different tool. The first supports verification, weighting, and explanation. The second supports only retrieval.
 
-`\chaptermark{Identity and Canonicalization}`{=latex}
+Whether you need that capability depends on your domain and your users. A researcher exploring a graph for hypothesis generation might be satisfied with "drug A is connected to disease B" and not need to drill into sources. A clinician considering a treatment decision needs the evidence. A regulatory submission requires traceability. Design for the most demanding use case you anticipate.
+
+If you do need provenance at query time, design for it from the start. The query interface should support "give me this relationship and its provenance" as a first-class operation. The API response should include source documents, passages, confidence, and whatever else your schema captures. Retrofitting this into a schema that stored relationships without provenance, or into a server that never exposed it, is painful. You'd need to re-ingest to capture what wasn't captured, and you'd need to extend the API to return what wasn't designed to be returned. Get it right early.
+
+## Chapter 11: The Identity Server
+
+`\chaptermark{The Identity Server}`{=latex}
+
+The identity server is the authoritative component for entity identity across the knowledge graph. It handles the full lifecycle of an entity's identity: resolving a mention to an ID, promoting a provisional entity to canonical status, detecting synonyms, and merging duplicates into a single survivor. All of this must be correct under concurrent access from multiple worker processes and multiple server
+replicas.
+
+There are a number of authoritative ontologies in the world of medical literature: UMLS for diseases, HGNC for genes, RxNorm for drugs, and others. These are universally known, meticulously maintained, and trusted in that world. The stakes in medicine are high, and the care given to these ontologies reflects that.
 
 ### Identity Is Load-Bearing
 
@@ -795,84 +804,554 @@ The promotion mechanism is the set of thresholds that govern when a provisional 
 
 Provisional entities are not second-class. They participate in the graph fully. They can have relationships, appear in traversals, and show up in query results. The difference is that they don't have an external canonical ID yet, which means they're not interoperable with systems that expect one. For many use cases, that's acceptable. For others, you'll want a human-in-the-loop process to review high-value provisional entities and either promote them (with a minted ID or a newly available authority match) or merge them into existing canonical entities.
 
-### The Identity Server
+### Responsibilities
 
-The concepts in this chapter -- authority lookup, provisional entities, promotion, synonym detection, merge -- can each be implemented ad hoc, scattered across pipeline scripts and ingestion workers. That works at small scale. At larger scale, with multiple concurrent workers and multiple server replicas ingesting in parallel, the lack of a single authoritative component creates race conditions: two workers independently resolve the same mention and create two provisional entities instead of one; a promotion check runs on a stale snapshot and promotes twice; a synonym merge races against a concurrent insert.
+1. **Canonical ID assignment.** Given a surface-form mention, return a stable entity ID — canonical if an authoritative external source (UMLS, HGNC, MeSH, etc.) provides one, provisional otherwise. A provisional entity is promotable once domain-defined thresholds are met.
+2. **Promotion.** Elevate a provisional entity to canonical status when the domain's promotion policy determines that sufficient evidence has accumulated.  Promotion is a one-time, irreversible transition.
+3. **Synonym recognition.** Detect when two entities refer to the same real-world concept, using domain-defined criteria such as vector similarity, shared external identifiers, or string normalization.
+4. **Merging.** Collapse duplicate entities into a single survivor, redirecting all references from absorbed entities to the survivor. Absorbed entities are retained — not deleted — so that stale external references remain resolvable via a single redirect lookup.
 
-One approach worth considering is to consolidate all entity-identity decisions into a single abstract component: the **identity server**. The design described here is promising and worth exploring, but has not yet been thoroughly tested in production. Its interface has five operations:
+### Abstract Interface
 
-- **`resolve(mention, context) → entity_id`** -- Map a surface form to an entity ID. Performs authority lookup, returns a canonical ID if one is found, otherwise creates and returns a provisional ID. Idempotent: resolving the same mention twice returns the same ID.
-- **`promote(provisional_id) → entity_id`** -- Attempt to elevate a provisional entity to canonical status using the domain's promotion policy. No-op if already canonical.
-- **`find_synonyms(entity_id) → [entity_id]`** -- Return IDs of entities considered synonymous with the given entity, using cosine similarity, shared external identifiers, or string normalization. Read-only; does not merge.
-- **`merge(entity_ids, survivor_id) → entity_id`** -- Collapse a set of entities into a single survivor. All references -- relationships, mentions, bundle edges -- are redirected to the survivor. Absorbed entities are marked `MERGED` (not deleted), with a `merged_into` pointer so stale external references remain resolvable. Status rules: if any participant is canonical, the survivor stays canonical; otherwise it stays provisional.
-- **`on_entity_added(entity_id, context)`** -- Event hook fired after an entity insert. Triggers synonym detection and, if candidates are found, calls `merge`. This event-driven model subsumes batch synonym sweeps.
+```python
+from abc import ABC, abstractmethod
 
-The interface is an ABC (abstract base class), keeping the domain logic independent of any particular storage backend. The reference implementation is Postgres-backed:
+class IdentityServer(ABC):
 
-- **`resolve`** uses `INSERT ... ON CONFLICT (name, entity_type) DO NOTHING` so concurrent workers serialise naturally without an explicit lock. The conflict target must be `(name, entity_type)` -- not just `entity_id` -- because two concurrent workers each generate a fresh provisional UUID; conflicting on `entity_id` alone leaves both rows in the table (different IDs, same mention). A `UNIQUE (name, entity_type)` constraint on the entity table is a prerequisite. After the insert, the implementation re-reads whichever row won the race and returns that ID, so the caller always gets the durable winner.
-- **`promote`** uses `SELECT FOR UPDATE` to lock the row before checking and updating, preventing double-promotion. Relationship references are updated before the entity PK is mutated so there is no window where a relationship row points at a nonexistent entity.
-- **`merge`** acquires a Postgres advisory lock keyed on the sorted set of entity IDs, preventing two workers from merging the same pair in opposite orders. The lock key must be computed deterministically across processes -- Python's built-in `hash()` is randomized per process and must not be used; a stable hash (e.g. the first 8 bytes of MD5 over the sorted, pipe-joined IDs, folded to a signed 64-bit integer) is correct.
-- **`on_entity_added`** is called inside the same transaction as the entity insert, so synonym detection fires only after the row is durably visible -- eliminating the race where two concurrent workers each see the other as a merge candidate before either has fully committed. Because auto-merges are irreversible, log a structured warning before executing each merge (entity IDs, similarity threshold, survivor) so that a miscalibrated threshold leaves an auditable trace rather than silent data loss.
+    @abstractmethod
+    async def resolve(self, mention: str, context: dict) -> str:
+        """
+        Resolve a mention string to an entity ID.
 
-Authority-lookup results are cached in Redis, shared across replicas. A corpus of 100,000 documents might mention "aspirin" in 5,000 of them; without a cache that is 5,000 round-trips to RxNorm for the same answer. The cache should be persistent across pipeline runs so that mappings accumulated in one run are available in the next -- consistency as well as performance, since the same mention must always resolve to the same ID. Cache keys are versioned by authority source (e.g. `resolve:umls:v2026.01:{mention}`) so that a new authority release can be handled by key rotation rather than a full cache flush. Negative results -- mentions confirmed to have no canonical match -- are also cached, with a shorter TTL, preventing repeated API calls for genuinely novel entities and allowing recently added terms to become canonical within a reasonable window.
+        Performs domain authority lookup and returns a canonical ID if one is
+        found. Otherwise creates and returns a new provisional ID. This
+        operation must be idempotent: resolving the same mention twice returns
+        the same ID.
 
-Survivor selection during merge is domain-pluggable: `DomainSchema` declares an abstract `preferred_entity` method that receives the synonym candidates and returns the preferred survivor. Medical domains, for example, prefer canonical entities over provisional, then entities with authoritative external IDs (UMLS, HGNC), then higher usage count, then earlier creation date. This keeps survivor policy fully in domain hands rather than baked into the identity server.
+        Parameters
+        ----------
+        mention:
+            The surface form of the entity mention.
+        context:
+            Domain-defined context (e.g. document ID, domain name, entity
+            type hint, extraction metadata) used by authority lookup and
+            synonym detection.
 
-The identity server is the engineering realization of the design decisions described earlier in this chapter. It is where "treat canonical IDs as primary keys" and "cache aggressively" and "provisional entities are first-class" stop being principles and become code.
+        Returns
+        -------
+        str
+            A canonical or provisional entity ID.
+        """
 
-**Deployment: in-process vs. HTTP service.** For a single-host docker-compose prototype the identity server runs in-process, sharing the application's Postgres session. That's fine -- it's simple, it keeps `on_entity_added` inside the same transaction as the entity insert (preserving atomicity), and there's nothing to operate. In larger systems, where multiple independent services or pipelines all need to resolve mentions, it makes sense to extract the identity server into a dedicated HTTP microservice. The ABC interface is the right seam for this: `HttpIdentityServer` implements the same five-method contract and translates each call to an HTTP request; the rest of the system is oblivious to the change. The HTTP service itself is thin -- a FastAPI app wrapping the Postgres implementation. The one trade-off to document: `on_entity_added` can no longer run inside the caller's transaction, so there is a narrow window where a newly inserted entity is visible to reads before synonym detection has fired. In practice this is usually acceptable, but it is worth being explicit about the degraded guarantee.
+    @abstractmethod
+    async def promote(self, provisional_id: str) -> str:
+        """
+        Attempt to promote a provisional entity to canonical status.
 
-**Scaling synonym detection.** The `find_synonyms` operation deserves special attention. A naive implementation compares the target entity's embedding against every other entity in the store -- O(n) in the number of entities. That is fine at tens of thousands of entities. At millions it becomes untenable. The fix is a vector index: pgvector's HNSW or IVFFlat index turns the scan into an approximate nearest-neighbour query that runs in sub-linear time regardless of corpus size. Because `find_synonyms` is behind the ABC, the switch from in-process cosine comparison to a pgvector index query requires no interface change. The important thing is to plan for it early: the `embedding` column should be provisioned as a `vector(N)` type from the start (or migrated to it before the table grows large), because adding a vector index to a multi-million-row table is a slow, lock-intensive operation you would rather not perform under load.
+        The domain PromotionPolicy determines whether promotion is warranted.
+        Behaviour by current entity status:
 
-## Chapter 12: Provenance and Trust
+        - provisional: checks policy; upgrades if thresholds are met.
+        - canonical: no-op; returns the existing canonical ID.
+        - merged: logs a warning with the stale ID; returns the survivor's ID.
 
-`\chaptermark{Provenance and Trust}`{=latex}
+        This operation must be idempotent.
 
-### Domain-Dependent Honesty
+        Returns
+        -------
+        str
+            The canonical ID (new or pre-existing), or the survivor ID if
+            the entity was merged.
+        """
 
-Provenance is not equally important in every domain. Be honest with yourself about how much provenance infrastructure your domain actually requires before you build it.
+    @abstractmethod
+    async def find_synonyms(self, entity_id: str) -> list[str]:
+        """
+        Return the IDs of entities considered synonymous with the given entity.
 
-In medicine, the difference between "this drug inhibits this enzyme, from a single case report" and "this drug inhibits this enzyme, replicated across forty randomized controlled trials" is the difference between a hypothesis and a clinical fact. A clinician making a treatment decision needs to know which. A researcher generating hypotheses might care less about the evidence grade and more about the structural pattern. But for any application where the quality of the claim matters -- clinical decision support, regulatory submission, litigation -- provenance is not optional. You need to know where each relationship came from, what kind of study supported it, and how confident the extraction was.
+        Synonym criteria are domain-defined and may include cosine similarity
+        above a threshold, shared external identifier, or string normalisation
+        match. This method is read-only; it reports candidates without merging.
 
-In other domains, the bar is lower. A knowledge graph of theatrical productions -- which plays were performed where, when, by whom -- might be perfectly useful without tracing every edge to a specific source. If the graph says "Hamlet was performed at the Globe in 1601," you might care that it's correct, but you probably don't need a provenance record that distinguishes "extracted from a primary source" versus "extracted from a secondary source" versus "inferred from context." The graph is useful even if you can't trace every edge. Building elaborate provenance infrastructure for a domain that doesn't need it is over-engineering.
+        Returns
+        -------
+        list[str]
+            IDs of synonym candidates, not including entity_id itself.
+            Returns an empty list if no synonyms are found.
+        """
 
-The honest question: what will your users do with the graph? If they will make high-stakes decisions based on it, provenance matters. If they will use it for exploration, discovery, or casual reference, a lighter touch may suffice. Get that right before you invest in schema design and pipeline complexity.
+    @abstractmethod
+    async def merge(self, entity_ids: list[str], survivor_id: str) -> str:
+        """
+        Merge a set of entities into a single survivor.
 
-When provenance does matter, it matters at an architectural level, not as an add-on. You can't retrofit provenance into a schema that didn't anticipate it without re-ingesting your corpus. The relationship model, the bundle structure, and the extraction prompts all need to capture provenance from the start. Think about it carefully before you build.
+        All references (relationships, mentions, bundle edges) pointing to any
+        absorbed entity are redirected to the survivor. Absorbed entities are
+        marked status=MERGED with merged_into=survivor_id so that stale
+        external references remain resolvable via a single lookup.
 
-### What Provenance Buys You
+        This operation must be idempotent: merging already-merged entities is
+        a no-op that returns the survivor ID.
 
-When it matters, it matters a lot. A relationship with provenance -- specific source document, section or passage, extraction method, confidence score, study design if applicable -- is evidence. Without provenance, a relationship in your graph is an assertion of unknown quality. You can't verify it. You can't weight it against conflicting claims. You can't explain to a user why the graph says what it says. You're left with "the graph says drug A treats disease B" and no way to assess whether that's a well-replicated finding or a single speculative mention.
+        Parameters
+        ----------
+        entity_ids:
+            The full set of IDs to unify, including the survivor.
+        survivor_id:
+            The ID that will remain after the merge. Must be a member of
+            entity_ids. Determined by the caller via
+            DomainSchema.preferred_entity.
 
-Provenance is also what lets you audit extraction quality. When a relationship looks wrong, you need to trace it back: which document, which passage, what did the extractor see? That trace is how you find prompt bugs, schema ambiguities, and source documents that are genuinely ambiguous. Without it, you're debugging in the dark.
+        Returns
+        -------
+        str
+            The survivor ID.
+        """
 
-It's also how you debug pipeline regressions. If extraction quality drops after a prompt change, provenance lets you compare: what did the old pipeline produce for this document versus the new one? Which relationships disappeared, which appeared, which changed? Provenance turns "something got worse" into "here's exactly what changed and where."
+    @abstractmethod
+    async def on_entity_added(self, entity_id: str, context: dict) -> None:
+        """
+        Event hook called after an entity is inserted or updated.
 
-And it's how you answer the question every serious user will eventually ask: "Why does the graph say this?" A graph that can't answer that question is a black box. A graph that can produce, for any relationship, the list of sources that support it, with enough detail to verify, is a tool you can trust.
+        Must be called inside the same transaction as the entity insert so
+        that synonym detection fires only after the row is durably committed
+        and visible. This prevents the race where two concurrent workers each
+        see the other as a merge candidate before either insert completes.
 
-### Confidence as a Signal, Not a Guarantee
+        Typical implementation:
+        1. Embed the entity (if not already embedded).
+        2. Call find_synonyms to identify candidates.
+        3. If candidates are found, call DomainSchema.preferred_entity to
+           select the survivor.
+        4. Call merge for each confirmed synonym pair.
 
-LLMs can be prompted to produce confidence scores alongside their extractions. "How confident are you that this relationship holds, on a scale of 1 to 5?" The model will give you a number. That number is useful. It correlates with extraction quality: relationships the model is confident about tend to be more reliable than ones it's uncertain about. You can use it to filter, rank, or weight results. It's worth capturing.
+        This event-driven model subsumes batch synonym sweeps: a batch sweep
+        is equivalent to replaying on_entity_added for every entity in the
+        store.
+        """
+```
 
-It is not a calibrated probability. A model that says "90% confident" does not mean that 90% of such extractions will be correct. The model has no access to ground truth; it's producing a subjective assessment of its own certainty, which is a different thing. The scores are ordinal -- higher usually means more reliable -- but the mapping from score to actual accuracy is unknown and varies by domain, relationship type, and prompt.
+### Domain-Pluggable Behaviour
 
-The honest framing: confidence is one input to trust, not trust itself. A high-confidence extraction from a single case report is still weak evidence. A low-confidence extraction replicated across twenty randomized trials might be strong evidence. Confidence tells you something about the extraction process. Provenance tells you something about the underlying evidence. You need both, and you need to combine them with domain judgment rather than treating either as a sufficient statistic.
+The identity server ABC deliberately leaves the following decisions to the domain:
 
-### Multi-Source Relationships
+| Concern | Where it lives |
+|---|---|
+| Authority lookup | Domain implementation (e.g. UMLS API, DBPedia SPARQL, no-op) |
+| Synonym criteria | Domain implementation (e.g. cosine similarity threshold, shared CUI) |
+| Merge survivor selection | `DomainSchema.preferred_entity` |
+| Promotion thresholds | Domain `PromotionPolicy` |
 
-When multiple independent sources assert the same relationship, that's meaningful signal. "Drug A inhibits enzyme B" from one paper is a datum. "Drug A inhibits enzyme B" from five papers, each with different authors, methods, and populations, is a finding. The replication across sources is evidence that the relationship is robust, not an artifact of one study's design or one extraction's error.
+#### Survivor Selection
 
-Designing your data model to aggregate evidence across sources -- rather than storing one relationship record per source -- is worth the extra complexity if your corpus is large enough that the same relationship will appear many times. Instead of five edges from document A, B, C, D, and E, you have one edge with a provenance list of five sources. That aggregation enables queries like "how many sources support this relationship?" and "what's the evidence grade for this claim?" It also keeps the graph from exploding in size: the number of unique relationships in a domain is much smaller than the number of relationship mentions across documents.
+`DomainSchema` declares an abstract method for survivor selection:
 
-The aggregation logic needs to handle nuance. Two papers from the same author group might not be independent; you might want to weight them differently than two papers from unrelated labs. A paper that retracts a finding should reduce the evidence count, not leave a stale relationship in place. A paper that asserts the opposite -- "drug A does not inhibit enzyme B" -- creates a conflict that your model should represent rather than silently merging. These are design choices that depend on your domain and how you plan to use the graph.
+```python
+@abstractmethod
+def preferred_entity(self, candidates: list[BaseEntity]) -> BaseEntity:
+    """
+    Given a list of synonym candidates, return the preferred survivor.
 
-### Provenance at Query Time
+    Domain implementations encode their own preference rules, e.g.:
+    - Prefer canonical status over provisional
+    - Prefer the entity with the highest usage_count
+    - Prefer the entity with an authoritative canonical_ids entry
+    - Prefer the earlier created_at (more stable, longer-lived)
 
-The point of capturing provenance is being able to use it. A graph server that can answer "what's the evidence for this relationship?" rather than just "does this relationship exist?" is a qualitatively different tool. The first supports verification, weighting, and explanation. The second supports only retrieval.
+    The returned entity must be a member of candidates.
+    """
+```
 
-Whether you need that capability depends on your domain and your users. A researcher exploring a graph for hypothesis generation might be satisfied with "drug A is connected to disease B" and not need to drill into sources. A clinician considering a treatment decision needs the evidence. A regulatory submission requires traceability. Design for the most demanding use case you anticipate.
+`on_entity_added` calls `preferred_entity` to determine `survivor_id` before calling `merge`. Survivor policy is fully domain-controlled and does not belong in the identity server ABC.
 
-If you do need provenance at query time, design for it from the start. The query interface should support "give me this relationship and its provenance" as a first-class operation. The API response should include source documents, passages, confidence, and whatever else your schema captures. Retrofitting this into a schema that stored relationships without provenance, or into a server that never exposed it, is painful. You'd need to re-ingest to capture what wasn't captured, and you'd need to extend the API to return what wasn't designed to be returned. Get it right early.
+### Entity Status
+
+Entities carry one of three statuses:
+
+| Status | Meaning |
+|---|---|
+| `provisional` | Created from a mention with no authoritative external ID. Promotable via the domain promotion policy. |
+| `canonical` | Has a stable external ID (e.g. UMLS CUI, MeSH term) or has been promoted. Promotion is a one-time transition. |
+| `merged` | Absorbed into another entity. Retained for redirect lookups via `merged_into`. Excluded from normal queries. |
+
+#### Merge × Promotion Status Rules
+
+The status of the survivor after a merge:
+
+- **provisional + provisional → provisional.** The merged entity remains
+  promotable via the normal promotion policy.
+- **canonical + anything → canonical.** The survivor retains canonical status
+  regardless of the absorbed entity's status.
+
+`promote` behaviour by status:
+
+- **provisional:** check promotion policy, upgrade if warranted.
+- **canonical:** no-op; returns the existing canonical ID.
+- **merged:** redirect to survivor ID; emit a log warning; do not raise.
+
+### Idempotency Contract
+
+Every mutating operation must be safe to call more than once with the same arguments. Workers may retry after transient failures and must not produce inconsistent state by doing so.
+
+| Operation | Idempotency mechanism |
+|---|---|
+| `resolve` | `INSERT ... ON CONFLICT DO NOTHING` on unique mention/domain key |
+| `promote` | Conditional update `WHERE status = 'provisional'` |
+| `merge` | Advisory lock + existence check; already-merged entities are a no-op |
+| `on_entity_added` | Delegates to `find_synonyms` (read-only) and `merge` (idempotent) |
+
+### Recommended Implementation: Postgres-Backed
+
+Postgres is the natural backing store because it is already in the stack, provides row-level and advisory locking for cross-replica atomicity, and shares a transaction boundary with entity and relationship writes. No additional coordination service is required for the identity server itself.
+
+#### Locking Strategy
+
+**`resolve`** — use `INSERT ... ON CONFLICT DO NOTHING` on a unique index over the normalised mention string and domain. Two concurrent workers resolving the same mention will serialize at the index; the second gets the ID the first created.
+
+**`promote`** — use `SELECT FOR UPDATE` on the provisional entity row, then check-and-update within the same transaction. This prevents two workers from both evaluating the promotion condition as true and both attempting the transition.
+
+**`merge`** — acquire a Postgres advisory lock keyed on the lexicographically sorted pair (or set) of entity IDs before beginning the merge transaction. This prevents two workers from merging the same pair in opposite orders, which would produce a deadlock or a double-merge. The advisory lock is released when the transaction commits.
+
+**`on_entity_added`** — must be called inside the same transaction as the entity insert. Synonym detection (`find_synonyms`) is read-only and acquires no locks.  The subsequent `merge` call acquires its own advisory lock as above.
+
+#### Authority Lookup Caching in `resolve`
+
+Authority lookup is a network call and is not idempotent in the face of transient failures. Results are cached in Redis, shared across all replicas:
+
+1. Check cache keyed on normalised mention + authority source version → hit: use cached ID, skip API call.
+2. Miss: call authority API, cache result, then proceed with DB insert.
+
+**Negative caching** — a "no canonical match" result is also cached with a shorter TTL, so a mention that later acquires an authoritative ID does not remain provisional indefinitely.
+
+**Cache key versioning** — keys are prefixed with the authority source version, e.g. `resolve:umls:v2026.01:{mention}`. A new UMLS release is handled by flushing or re-keying without invalidating unrelated entries.
+
+**Residual risk** — if the API call succeeds but the process crashes before the DB insert commits, a retry hits the cache, gets the canonical ID, and re-attempts the insert. `ON CONFLICT DO NOTHING` handles this correctly.
+
+#### Synonym Detection via pgvector
+
+`find_synonyms` uses vector embeddings and cosine similarity via the `pgvector` extension. Approximate nearest-neighbour search at scale is its core capability, and keeping similarity queries inside Postgres means they share the same transaction boundary as entity operations with no additional service.
+
+`on_entity_added` embeds the new entity (if not already embedded) and queries pgvector for neighbours above a domain-defined similarity threshold. The result list is passed to `preferred_entity` and then to `merge`.
+
+#### Schema Notes
+
+A single `entities` table with a `status` column is preferred over separate tables for provisional and canonical entities. Single-table layout simplifies joins and allows a single index to cover all status-filtered queries.
+
+Merged entities are retained with `status = 'merged'` and a `merged_into` foreign key pointing to the survivor. This supports redirect resolution in a single lookup and preserves provenance for audit and retraction purposes.
+
+### Multi-Replica Deployment
+
+The Postgres-backed implementation is correct under any number of concurrent workers or server replicas without additional coordination:
+
+- **`resolve` races** are handled by the unique index and `ON CONFLICT DO NOTHING`.  The second worker gets the row the first created; no duplicate entities are produced.
+- **`promote` races** are serialized by `SELECT FOR UPDATE`. Only one worker performs the transition; the others see the already-canonical row and return it.
+- **`merge` races** are serialized by the advisory lock on the sorted entity ID pair. Two workers attempting to merge the same pair in opposite orders will queue behind the same lock; the second will find the entities already merged and return the survivor ID as a no-op.
+- **`on_entity_added` races** — the requirement that this fires inside the entity insert transaction means two workers inserting different entities that are synonyms of each other will each trigger synonym detection after their own insert is visible. The first to detect the other will attempt a merge; the advisory lock ensures this is safe.
+
+Redis is required only for authority lookup caching in `resolve`. If authority lookup is not used (domain is no-op), Redis is not required for the identity server.
+
+## Chapter 12: The Ingestion Pipeline
+
+`\chaptermark{The Ingestion Pipeline}`{=latex}
+
+### Why Multiple Passes at All
+
+The temptation is to do extraction end-to-end in one shot: send the document to the model, get back entities and relationships, done. That approach fails at scale for reasons that are worth stating explicitly. A single monolithic pass has a single point of failure -- if anything goes wrong, you restart from scratch. It produces output that is hard to debug, because you can't inspect intermediate states. And it conflates concerns that are better handled separately: entity extraction, identity resolution, relationship extraction, and assembly are different problems with different failure modes and different recovery strategies.
+
+Staging the pipeline into multiple passes addresses all of this. Each pass has a well-defined input and output. Failures are recoverable: if Pass 2 fails on document 47, you fix the issue and rerun Pass 2 from document 47, not from document 1. Intermediate artifacts are inspectable -- you can look at the raw entity extractions before resolution, or the resolved entities before relationship extraction, and see exactly where the pipeline went wrong. The per-document bundle becomes the natural unit of work between passes: each document produces a bundle that can be validated, cached, and merged independently. None of this is medlit-specific. It's good pipeline design for any extraction problem at non-trivial scale.
+
+The medlit pipeline uses a two-pass architecture: Pass 1 extracts entities and resolves them to canonical or provisional IDs; Pass 2 extracts relationships between those resolved entities. That ordering matters. You need a consistent entity vocabulary before you can reliably extract relationships -- "this drug treats this disease" is only useful if "this drug" and "this disease" have been resolved to the same nodes across the document. Other orderings are possible, but the principle holds: separate concerns, make each pass debuggable, design for partial failure and restart.
+
+### Parsing: Getting to Text
+
+Whatever your source format, you need to get to structured text before you can extract anything. The model reads text; it doesn't read PDF layout or XML tags. JATS XML -- the format used by PubMed Central -- is medlit's case: a structured representation of journal articles with metadata, abstract, and body sections. Yours might be PDFs, HTML, EPUB, proprietary formats, or plain text that's already clean. The parser's job is to produce a document representation that preserves structure the extractor can use: section boundaries, paragraph boundaries, and the actual text content.
+
+Two decisions matter regardless of format. First, how do you identify section boundaries? In scientific papers, the distinction between Methods, Results, and Discussion carries semantic weight -- a claim in Results is different from a claim in Discussion. In legal documents, sections and subsections matter for citation. The parser should expose this structure so downstream passes can use it. Second, how do you chunk for extraction? Documents are often too long to send to the model in one call. Chunk too small and you lose context -- the referent of "it" or "the compound" may be in the previous chunk. Chunk too large and you exceed model context limits, dilute the signal, or hit token budgets that make the run expensive. Overlapping chunks can help: each sentence appears in at least one chunk, so no sentence is orphaned at a boundary. Sentence boundaries are a practical constraint worth respecting -- splitting mid-sentence produces fragments that are harder for the model to interpret correctly.
+
+### Extraction: The LLM Pass
+
+This is where your schema meets the text. The extraction prompt is not a generic "extract entities and relationships" request. It is a binding of your entity types and relationship types to natural language, written so the model understands exactly what to look for. A good prompt names each entity type with a clear definition, lists each relationship type with its subject and object constraints, and instructs the model to capture provenance alongside content -- which passage, what hedging language, what confidence. The prompt is the place where domain expertise gets translated into extraction behavior. A clinician reviewing the prompt should be able to assess whether it matches their understanding of the domain.
+
+The tradeoff between prompt specificity and prompt flexibility is real. A highly specific prompt -- "extract only direct assertions, ignore speculative language, require explicit subject-verb-object structure" -- tends to produce higher precision and lower recall. The model extracts less, but what it extracts is more reliable. A more flexible prompt -- "extract any relationship that might be implied, include hedged claims" -- tends to produce higher recall and lower precision. You get more relationships, but more of them will need filtering or correction. There's no universal right answer. The right balance depends on your domain, your tolerance for noise, and what you're doing with the graph. Iteration over the prompt is the design method. You run extraction on a sample, inspect the output, adjust the prompt, repeat. There's no shortcut.
+
+### A Note on Vocabulary
+
+The medlit pipeline has an explicit vocabulary pass that runs alongside or after extraction. The idea: before you try to resolve "BRCA1," "breast cancer gene 1," and "BRCA1 protein" to the same entity, you establish a shared vocabulary of entity names and their variants. The vocabulary pass can use the same LLM that does extraction -- "given these entity mentions from the document, list the canonical names and aliases for each" -- or it can be a separate step that clusters mentions and assigns preferred forms. Not every domain needs this. If your corpus uses relatively consistent terminology, extraction may produce sufficiently normalized output without it. But if your domain has heavy terminology -- medicine, law, chemistry, any field where the same concept has many names and many names map to the same concept -- something like this will pay off. The vocabulary pass reduces the load on the deduplication and resolution stages downstream. It's a form of schema binding: you're telling the model, before relationship extraction, what the canonical forms are so it can use them consistently.
+
+### Deduplication
+
+The same entity extracted from many documents will appear under slightly different names. "Aspirin," "acetylsalicylic acid," "ASA," and "2-acetoxybenzoic acid" are one drug. "Type 2 diabetes," "T2DM," "diabetes mellitus type 2," and "adult-onset diabetes" are one disease. The deduplication stage groups mentions, resolves them to canonical forms, and handles the ambiguous cases. This is where the gap between "a list of extracted facts" and "a coherent graph" starts to close.
+
+The details vary by domain. In medicine, authority lookup -- UMLS, RxNorm, HGNC, and the rest -- does much of the work: many apparent synonyms resolve to the same canonical ID automatically. What remains after authority lookup is the residue: novel entities, institution-specific abbreviations, terms that aren't in any vocabulary yet. For those, you need other signals. Embedding similarity can help: mentions that are semantically close in embedding space may be the same entity. So can co-occurrence: if "compound X" and "imatinib" appear in the same document and the context suggests they're the same, that's evidence. The hard cases are the ambiguous ones -- "ACE" could be angiotensin-converting enzyme or the gene, "CRF" could be corticotropin-releasing factor or chronic renal failure. Resolving those may require context, domain heuristics, or human review. The universal part: you need a deduplication strategy, and it should run before or alongside relationship extraction so that relationships reference resolved entities, not raw strings.
+
+### Assembly
+
+Once you have per-document extractions -- entities resolved, relationships extracted -- you need to merge them into a coherent whole. Assembly is not just concatenation. When multiple documents assert the same relationship, that's meaningful signal. "Drug A treats Disease B" from one paper is weaker than "Drug A treats Disease B" from five independent papers. The assembly stage should aggregate evidence across sources: one relationship record with a provenance list, not five duplicate edges. That aggregation is what makes the graph useful for reasoning -- you can weight relationships by how many sources support them, filter by evidence type, and detect when sources conflict.
+
+The structure of the final bundle is worth thinking about carefully before you start. What does a "document" in your graph look like? Is it a node with metadata and outgoing edges to the relationships it supports? Are relationships first-class with document references, or are documents first-class with relationship references? The choice affects query patterns, provenance traversal, and how you handle updates when you re-ingest a document with corrections. Changing the bundle structure later, once you have data and downstream consumers, is expensive. Get it right early.
+
+### Progress Tracking and Resumability
+
+Large ingestion runs fail partway through. A run over 100,000 documents will hit rate limits, network timeouts, model outages, or your own mistakes. If the pipeline has no notion of progress, you restart from zero every time. That's acceptable for a research prototype. It's not acceptable for something you run regularly.
+
+Design for restartability from the beginning. Each document should have a processing status: not started, in progress, completed, failed. The pipeline should record which documents have been fully processed and which haven't. On restart, it should skip completed documents and resume from the first incomplete one. Checkpointing within a document -- if a single document requires multiple LLM calls, record which chunks have been processed -- can help for very long documents, though the document is usually the right granularity. The progress store should be persistent and survive process restarts. This isn't glamorous work. It's the difference between a pipeline you can run once as a demo and a pipeline you can run every week as part of your workflow.
+
+### Design Principles
+
+The concepts above translate directly into four implementation commitments.
+
+**Dedup-on-write.** The `IdentityServer` resolves entity identity and detects synonyms incrementally as each entity is written. There is no global deduplication pass over the corpus; papers can be ingested concurrently and the identity server handles merging correctly under concurrent access.
+
+**Per-paper atomicity.** Each paper moves through stages independently. A failure at any stage leaves the paper at its last committed status; the next available worker picks it up and retries. No paper's failure affects any other.
+
+**Durable checkpoints.** Raw fetched text and raw LLM extraction output are stored durably before any graph writes. This means a schema change, extraction bug, or infrastructure failure can be recovered from without re-fetching or re-paying LLM costs.
+
+**Shared pipeline code.** The MCP tool and the batch runner call the same stage functions. There is no separate implementation for interactive versus batch use.
+
+### Stages
+
+#### 1. Fetch
+
+Retrieves raw text or XML for a PMC ID from the PMC API and stores it in `ingest_jobs.raw_text`. This stage is pure I/O and completely independent of all other work. A previously fetched paper never needs to be re-fetched.
+
+#### 2. Extract
+
+Runs the LLM extraction call for a paper. Before calling the LLM, the worker queries the live graph for the most frequent entities of each relevant type and injects them as context. This keeps extraction consistent across workers and across time — the context improves as the corpus grows.
+
+The raw LLM output is stored in `ingest_jobs.raw_extraction` and also written to a paper artifact file (see below) before any graph writes occur.
+
+#### 3. Ingest
+
+Writes entities and relationships from `raw_extraction` to the graph. For each entity:
+
+1. `identity_server.resolve(mention, context)` — returns a canonical or provisional entity ID, creating one if needed, idempotently.
+2. `identity_server.on_entity_added(entity_id, context)` — triggers synonym detection and merge.
+
+Both calls happen **inside the same transaction as the entity insert**, so synonym detection fires only after the row is durably committed and visible. This prevents the race where two concurrent workers see each other as merge candidates before either insert completes.
+
+Relationship writes are in the same transaction as the entity inserts for the paper. There is no gap between them.
+
+### Work Queue
+
+A Postgres table coordinates all work:
+
+```sql
+CREATE TABLE ingest_jobs (
+    pmcid          TEXT PRIMARY KEY,
+    status         TEXT NOT NULL DEFAULT 'pending',
+                   -- pending → fetching → fetched
+                   --        → extracting → extracted
+                   --        → ingesting → done | failed
+    raw_text       TEXT,
+    raw_extraction JSONB,
+    error          TEXT,
+    attempts       INT DEFAULT 0,
+    updated_at     TIMESTAMPTZ DEFAULT now()
+);
+```
+
+Workers claim jobs with:
+
+```sql
+SELECT * FROM ingest_jobs
+WHERE status = 'pending'
+FOR UPDATE SKIP LOCKED
+LIMIT 1;
+```
+
+`SKIP LOCKED` provides a distributed work queue with no additional infrastructure: no races, crash-safe, and naturally load-balanced across any number of workers or server instances. A crashed worker releases its lock when its connection drops and the job is retried by the next available worker. The `attempts` counter enables dead-lettering after N failures, leaving the job at `status='failed'` with the error recorded.
+
+Progress is trivially observable:
+
+```sql
+SELECT status, count(*) FROM ingest_jobs GROUP BY status;
+```
+
+### Paper Artifact Files
+
+After `extract_stage` stores `raw_extraction` in Postgres, it also writes a per-paper artifact file using atomic write-then-rename:
+
+```python
+tmp = artifact_dir / f".tmp_{pmcid}_{os.getpid()}.json"
+tmp.write_text(json.dumps({
+    "pmcid": pmcid,
+    "raw_text": raw_text,
+    "raw_extraction": raw_extraction,
+}, indent=2))
+tmp.rename(artifact_dir / f"paper_{pmcid}.json")
+```
+
+Including both `raw_text` and `raw_extraction` makes each file a self-contained
+record of everything that happened for that paper.
+
+**These files serve three purposes:**
+
+**Recovery.** If Postgres is lost, the artifact directory is sufficient to repopulate the graph. For extraction-side schema changes (new entity types, revised prompts), reset to `status='fetched'` and re-run from `raw_text`. For ingest-side changes only, reset to `status='extracted'` and re-run from `raw_extraction`. In both cases the identity server runs fresh and rebuilds all merges correctly.
+
+**Auditability.** A human-readable record of what was fetched and what the LLM extracted, independent of any subsequent graph operations.
+
+**Retraction support.** When a paper is retracted, its artifact file provides an exact record of every claim it contributed to the graph. Provenance-aware graph queries can then down-weight or exclude retracted sources. The artifact is the supporting record for that process; a `retracted` flag on `ingest_jobs` is the mechanism.
+
+The artifact directory can be a local volume, NFS mount, or S3-compatible store.
+
+**Repopulation from artifacts:**
+
+```bash
+python -m kgserver.ingest --from-artifacts ./artifacts/ --ingest-workers 16
+```
+
+Reads `paper_*.json` from the directory, inserts each into `ingest_jobs` with the appropriate status and fields populated from the file (`INSERT ... ON CONFLICT DO NOTHING` skips papers already in the table), then lets the normal worker pool handle the rest.
+
+### Parallelism
+
+Different stages have different bottlenecks and should have independently tunable
+worker counts:
+
+| Stage   | Bottleneck                       |
+|---------|----------------------------------|
+| Fetch   | PMC API rate limits              |
+| Extract | LLM token budget / cost          |
+| Ingest  | Postgres / identity server locks |
+
+The batch runner accepts separate concurrency limits per stage. Running multiple instances of the batch runner across machines is safe; all instances share the same `ingest_jobs` table and coordinate via `SKIP LOCKED`.
+
+### Batch Ingestion
+
+```bash
+python -m kgserver.ingest --input pmcids.txt --fetch-workers 4 --extract-workers 8 --ingest-workers 16
+python -m kgserver.ingest --pmcid PMC12345 PMC67890
+```
+
+The batch runner inserts PMC IDs into `ingest_jobs` with `INSERT ... ON CONFLICT DO NOTHING` — papers already in the table are silently skipped — then launches worker pools for each stage. Multiple instances can run simultaneously across machines with no additional coordination.
+
+### MCP Tool
+
+The MCP tool is a convenience for a user who wants to pull in one or a few papers during a query session and have them available immediately. It is not intended for bulk operations.
+
+```python
+@mcp.tool()
+async def ingest_paper(pmcid: str) -> str:
+    """
+    Fetch, extract, and ingest a single paper into the knowledge graph.
+    The paper is available for querying immediately on return.
+    """
+    inserted = await db.execute(
+        "INSERT INTO ingest_jobs (pmcid, status) VALUES ($1, 'pending') "
+        "ON CONFLICT DO NOTHING",
+        pmcid
+    )
+    if not inserted:
+        row = await db.fetchrow(
+            "SELECT status FROM ingest_jobs WHERE pmcid = $1", pmcid
+        )
+        if row["status"] == "done":
+            return f"{pmcid} is already in the knowledge graph."
+
+    await fetch_stage(pmcid)
+    await extract_stage(pmcid)
+    await ingest_stage(pmcid)
+
+    return f"{pmcid} ingested successfully."
+```
+
+The tool runs the full pipeline inline and returns when the paper is available.  It writes to `ingest_jobs` so batch operations that encounter the same PMC ID later will skip it cleanly. For large lists of papers, use the batch CLI instead.
+
+### Extraction Output Format
+
+The artifact file captures what the LLM decided, before the identity server assigns any entity IDs. Mentions and evidence strings include their location in the source document so that any claim can be verified against the original text.
+
+`raw_text` is stored as the original PMC XML rather than stripped plain text.  PMC XML has explicit section labels (`<sec>`, `<title>`, `<p>`) that make section and paragraph extraction reliable, and preserving the structure means location references remain valid if the artifact is re-ingested later.
+
+Most paper metadata and cited references are available as structured fields in the PMC XML and are parsed directly by the fetch stage rather than extracted by the LLM. This makes them reliable and cheap — no prompt engineering required.  Each cited PMC ID is also a candidate for further ingestion, making the reference list a natural source for corpus expansion.
+
+```json
+{
+  "pmcid": "PMC12345",
+  "extracted_at": "2026-03-17T14:23:00Z",
+  "model": "claude-sonnet-4-6",
+  "metadata": {
+    "title": "Serum cortisol as a diagnostic marker for hypercortisolism",
+    "authors": [
+      { "name": "Jane A. Smith",  "institution": "Massachusetts General Hospital" },
+      { "name": "Robert T. Chen", "institution": "Harvard Medical School" }
+    ],
+    "publication_date": "2024-09-15",
+    "journal": {
+      "name": "Journal of Clinical Endocrinology & Metabolism",
+      "issn": "0021-972X",
+      "volume": "109",
+      "issue": "4",
+      "pages": "1123-1131"
+    }
+  },
+  "references": [
+    {
+      "pmcid": "PMC98765",
+      "doi": "10.1210/clinem/dgad001",
+      "authors": ["Johnson B", "Lee K"],
+      "title": "Urinary free cortisol in Cushing syndrome diagnosis",
+      "journal": "Endocrine Reviews",
+      "year": "2023"
+    }
+  ],
+  "entities": [
+    {
+      "mention": "cortisol",
+      "type": "Biomarker",
+      "locations": [
+        { "section": "Abstract", "paragraph": 1, "sentence": 2 },
+        { "section": "Results",  "paragraph": 2, "sentence": 1 },
+        { "section": "Results",  "paragraph": 4, "sentence": 3 }
+      ],
+      "attributes": {
+        "value": "elevated",
+        "specimen": "serum"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "subject_mention": "cortisol",
+      "predicate": "indicates",
+      "object_mention": "hypercortisolism",
+      "evidence": "Serum cortisol levels were elevated in all patients diagnosed with hypercortisolism.",
+      "evidence_locations": [
+        { "section": "Results", "paragraph": 2, "sentence": 1 }
+      ]
+    }
+  ]
+}
+```
+
+Key properties:
+
+- **Mentions, not IDs.** The artifact records what the LLM said. Entity IDs are assigned by `identity_server.resolve()` during ingest and are not present here.
+- **All locations for each entity.** The same entity may be mentioned many times across a paper. Recording all locations supports `usage_count` computation and provides the full evidentiary basis for the entity.
+- **Evidence strings with location.** The verbatim text supporting each relationship, with its position in the document. `evidence_locations` is a list to handle cases where the supporting evidence spans multiple sentences or where the antecedent of a pronoun appears in a prior sentence.
+- **Model and timestamp.** Records exactly what produced this output, which is essential when comparing extractions before and after a prompt or model change.
+- **No graph state.** Nothing about merges, status, or canonical IDs. That is all rebuilt fresh by the identity server on each ingest.
+
+### Shared Pipeline Code
+
+```python
+async def fetch_stage(pmcid: str) -> None:
+    """Fetch raw text from PMC and store in ingest_jobs.raw_text."""
+
+async def extract_stage(pmcid: str) -> None:
+    """
+    Run LLM extraction using live graph context.
+    Store raw_extraction in ingest_jobs and write paper artifact file.
+    """
+
+async def ingest_stage(pmcid: str) -> None:
+    """
+    Write entities and relationships to the graph.
+    Calls identity_server.resolve() and on_entity_added() inside a single
+    transaction per paper.
+    """
+```
+
+The batch worker pools and the MCP tool all call these functions directly. The only difference is whether they are driven by a queue loop or a single inline call.
 
 # Part IV: What It Makes Possible
 
