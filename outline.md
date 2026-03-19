@@ -39,19 +39,19 @@ When we stray outside the training set contents, the LLM has no mechanism or str
 
 and of course he was told that on a nice day like this, he could use the exercise, so he should walk to the carwash.
 
-The LLM only "knows" what's in the training set, only the statistical patterns of the text it was trained on. It doesn't know that he'll need his car in order to get it washed. The dangerous part is that the wrong answer was delivered with the same tone and confidence as a right one would have been. There is no internal signal that says "I'm extrapolating here" or "I'm not sure." The machine has no way to distinguish a retrieval from memory from a plausible guess. This is **hallucination** -- the model producing confident, fluent, false output because it is doing what it was designed to do (generate statistically plausible text) in a situation where the right answer is not well represented in its training. Hallucination is not a bug to be patched; it is a predictable consequence of how LLMs work.
+The LLM only "knows" what's in the training set, only the statistical patterns of the text it was trained on. It doesn't know that he'll need his car in order to get it washed. The dangerous part is that the wrong answer was delivered with the same tone and confidence as a right one would have been. There is no internal signal that says "I'm extrapolating here" or "I'm not sure." The machine has no way to distinguish a retrieval from memory from a plausible guess. This is **hallucination**\index{hallucination} -- the model producing confident, fluent, false output because it is doing what it was designed to do (generate statistically plausible text) in a situation where the right answer is not well represented in its training. Hallucination is not a bug to be patched; it is a predictable consequence of how LLMs work.
 
 ### The Scale of the Problem
 
 For casual use, hallucination might be acceptable. For anything that matters -- medical advice, legal research, scientific synthesis, technical decisions -- we need more than fluency. We need answers that are grounded in something checkable, that can be traced to a source, that can be updated when the world changes, and that reflect the structure of the domain rather than the statistics of the training corpus. That is a different kind of system.
 
-### Retrieval-Augmented Generation or "RAG"
+### Retrieval-Augmented Generation or "RAG"\index{retrieval-augmented generation}\index{RAG|see{retrieval-augmented generation}}
 
 We can artificially extend the scope of the training set by adding content to the prompt for the parts the LLM is likely to get wrong. My brother might have created a prompt describing car wash operations and mentioning that the car must be physically present for the operations to work. With the prompt extended in this way, eventually the LLM would stop making that kind of mistake. That would have been a laborious manual process of tinkering and re-wording, and seeing what worked best. This approach would not scale to large bodies of knowledge.
 
 In practice, RAG usually means retrieving relevant passages from a document store and stuffing them into the prompt. That helps: the model can reason over the retrieved text instead of relying solely on training. But retrieved passages are still just text. The model has to parse them, resolve references, and combine information across snippets on the fly. There is no explicit representation of *what* entities are in play or *how* they are related. The structure of the domain stays implicit in the prose, and the model is left to infer it every time. For narrow, one-off questions that can be answered from a few paragraphs, this often works. For complex reasoning that depends on many entities and relationships, or for questions you didn't know to ask in advance, passage retrieval hits its limits.
 
-### Graph RAG
+### Graph RAG\index{Graph RAG}
 
 The LLM is given a knowledge graph to consult. Instead of raw passages, it gets entities and typed relationships: this drug *treats* this condition, this gene *encodes* this protein, this study *reports* this finding. The graph answers "what is connected to what" and "what kind of connection is it" in a form the model can traverse and cite. The entities and the links between them provide facts, context, names, dates, and meaningful connections. You knew you were asking an egg question for your omelette but you didn't realize in advance that you might also want to know how to tell if an egg has gone bad; the graph can surface that connection because the structure is explicit.
 
@@ -94,7 +94,7 @@ The implications reached beyond frog vision. If perception in even a simple vert
 
 What the frog's eye tells us is that the process of importing data must impose structure on that data if subsequent reasoning is to succeed.
 
-### Semantic Networks and the Frame Problem
+### Semantic Networks and the Frame Problem\index{semantic networks}\index{frame problem}
 
 The graph as a mathematical object is ancient. Euler's\index{Euler, Leonhard} 1736 solution to the Königsberg bridge problem\index{Königsberg bridge problem} -- can you cross each of the city's seven bridges exactly once? -- is usually cited as the birth of graph theory, and the centuries of results that followed established it as a mature branch of mathematics long before anyone thought to use it for knowledge representation. Euclid's\index{Euclid} *Elements*\index{Elements (Euclid)}, two thousand years earlier, had definitions, propositions, and logical dependencies between them that you could draw as a directed acyclic graph -- but Euclid wasn't making a claim about knowledge representation, he was doing geometry. The data structure, in some form, has always been available. The question was whether anyone would recognize it as the right structure for something other than bridges and triangles.
 
@@ -140,7 +140,7 @@ Prolog and the description logics that followed were attempts to put the reasoni
 
 By the early 1990s, the expert system boom had become the AI winter. Funding dried up, companies that had bet heavily on the technology quietly wrote off their investments, and the field moved on. What it left behind was a lesson that wouldn't fully land for another thirty years: the bottleneck was never the reasoning. It was always importing the knowledge at scale.
 
-### Doug Lenat and Cyc
+### Doug Lenat and Cyc\index{Cyc}
 
 Douglas Lenat\index{Lenat, Douglas} arrived at the Cyc project by a route that is worth tracing, because the route explains the ambition.
 
@@ -166,7 +166,7 @@ What Cyc demonstrated, inadvertently, was the same lesson that every other appro
 
 Lenat died in 2023. Cycorp continues. OpenCyc, a reduced version of the knowledge base, was released as open source in the mid-2000s and influenced a generation of researchers in ontology and knowledge representation. The CycL language, the microtheory architecture, and the careful attention to context-dependence and frame problems were genuine intellectual contributions that the field built on even when it moved away from the specific Cyc approach. The project failed to reach its most ambitious goal. So did every other project of the same era. That failure, traced from the right angle, is the argument this book is making.
 
-### The Semantic Web and the RDF Era
+### The Semantic Web and the RDF Era\index{Semantic Web}\index{RDF}\index{SPARQL}
 
 Tim Berners-Lee\index{Berners-Lee, Tim} invented the World Wide Web and then, almost immediately, started worrying that he'd built the wrong thing.
 
@@ -188,7 +188,7 @@ But the fundamental problem remained. Linked Data worked well for knowledge that
 
 In May 2012, Google announced what it called its Knowledge Graph with a phrase that became a kind of slogan for the field: the goal was to understand "things, not strings." Instead of matching keywords to documents, Google wanted its search engine to understand that "Leonardo da Vinci" was an entity -- a person, with a birthdate, a nationality, a set of works -- and that queries about him were queries about that entity, not just about a sequence of characters. The knowledge panel that appears to the right of search results when you search for a person, place, or organization is the visible surface of this system.
 
-The Knowledge Graph didn't emerge from nowhere. Its initial corpus was built primarily from Freebase, a structured knowledge base that a company called Metaweb had been developing since 2007 and that Google acquired in 2010. Freebase was itself a descendant of the collaborative, community-edited spirit of Wikipedia, but where Wikipedia stored knowledge as prose, Freebase stored it as structured facts: typed entities connected by typed relationships, contributed and edited by users. By the time Google folded it into the Knowledge Graph, Freebase contained roughly 44 million topics and 2.4 billion facts. Google supplemented this with Wikipedia, the CIA World Factbook, and other structured sources. The graph grew rapidly -- tripling in size within seven months of launch, reaching 570 million entities and 18 billion facts by the end of 2012, and eventually growing to hundreds of billions of facts on billions of entities.
+The Knowledge Graph didn't emerge from nowhere. Its initial corpus was built primarily from Freebase,\index{Freebase} a structured knowledge base that a company called Metaweb had been developing since 2007 and that Google acquired in 2010. Freebase was itself a descendant of the collaborative, community-edited spirit of Wikipedia, but where Wikipedia stored knowledge as prose, Freebase stored it as structured facts: typed entities connected by typed relationships, contributed and edited by users. By the time Google folded it into the Knowledge Graph, Freebase contained roughly 44 million topics and 2.4 billion facts. Google supplemented this with Wikipedia, the CIA World Factbook, and other structured sources. The graph grew rapidly -- tripling in size within seven months of launch, reaching 570 million entities and 18 billion facts by the end of 2012, and eventually growing to hundreds of billions of facts on billions of entities.
 
 What Google demonstrated at scale was that a knowledge graph was extraordinarily useful for a specific class of questions: factual queries about well-known entities. Who directed this film? When was this person born? What is the capital of this country? For these queries -- where the answer is a fact about a named entity that exists in the structured corpus -- the knowledge panel delivers an answer directly, without the user needing to click through to a source. This was genuinely transformative for search, and it established the knowledge graph as production infrastructure rather than academic exercise.
 
@@ -210,7 +210,7 @@ The knowledge extraction bottleneck persisted as the tools slowly improved, but 
 
 ### The Robot Scientist
 
-In 2009, a paper appeared in *Science* with a deceptively modest title: "The Automation of Science." [@king2009automation]\index{The Automation of Science (King)} Its author, Ross King,\index{King, Ross} then at Aberystwyth University, described a system called Adam that had done something no machine had done before: it had conducted original scientific research autonomously, from hypothesis to experiment to conclusion, without a human in the loop.
+In 2009, a paper appeared in *Science* with a deceptively modest title: "The Automation of Science." [@king2009automation]\index{The Automation of Science (King)} Its author, Ross King,\index{King, Ross} then at Aberystwyth University, described a system called Adam\index{Adam (robot scientist)} that had done something no machine had done before: it had conducted original scientific research autonomously, from hypothesis to experiment to conclusion, without a human in the loop.
 
 Adam's domain was the functional genomics of baker's yeast, *Saccharomyces cerevisiae*. Yeast is a well-studied organism, but in 2009 the functions of a significant fraction of its genes were still unknown. Adam was given access to a knowledge graph of yeast biology -- the known metabolic pathways, the existing gene-function assignments, the databases of protein interactions -- and tasked with identifying genes whose functions could be inferred and tested.
 
@@ -244,7 +244,7 @@ That is the missing piece. It is also, as of a few years ago, newly within reach
 
 `\chaptermark{What Is a Knowledge Graph?}`{=latex}
 
-### A working definition in four parts
+### A working definition in four parts\index{knowledge graph!definition}
 
 These four properties together distinguish a knowledge graph from a labeled graph, a property graph, a document store, or a well-structured relational database. Any of the four can be relaxed for pragmatic reasons -- and sometimes they should be -- but relaxing them has costs that are worth understanding before you do it.
 
@@ -252,9 +252,9 @@ These four properties together distinguish a knowledge graph from a labeled grap
 
 **Edges represent typed relationships.** Not generic connections but semantically defined predicates with a direction and a meaning. An edge labeled "inhibits" between a drug and an enzyme is a different kind of claim from one labeled "co-occurs with," and the distinction is not cosmetic.
 
-**Every entity has a canonical identity.** A stable identifier that persists across documents, authors, and time. The same gene is the same node whether a paper calls it by its official symbol, a common alias, or a misspelling. Resolving that multiplicity to a single identity is not bookkeeping; it's what makes the graph useful.
+**Every entity has a canonical identity.**\index{canonical entity}\index{canonical ID} A stable identifier that persists across documents, authors, and time. The same gene is the same node whether a paper calls it by its official symbol, a common alias, or a misspelling. Resolving that multiplicity to a single identity is not bookkeeping; it's what makes the graph useful.
 
-**Every relationship carries provenance.** A traceable record of where the claim came from, by what method it was established, and with what confidence. A relationship without provenance is an assertion of unknown quality. A relationship with provenance is evidence.
+**Every relationship carries provenance.**\index{provenance} A traceable record of where the claim came from, by what method it was established, and with what confidence. A relationship without provenance is an assertion of unknown quality. A relationship with provenance is evidence.
 
 ### Nodes, Edges, and What They Mean
 
@@ -297,7 +297,7 @@ A graph without provenance is a collection of claims with no way to evaluate the
 
 Canonical identity as a first-class concern, not an implementation detail. Identity is hard and consequential, being introduced at the level of abstraction appropriate for a chapter that's defining what a knowledge graph is. It's non-trivial, and treating it as an afterthought is a mistake. A graph where "BRCA1," "breast cancer gene 1," and "BRCA1 protein" are three separate nodes isn't a knowledge graph -- it's an index.
 
-But the stakes go deeper than deduplication. Canonical identity doesn't just help you say that two things are the same. It places those things within the body of human knowledge. The identifiers that matter -- UMLS CUI for medical concepts, Gene Ontology terms for molecular function, DBPedia URIs for cross-domain entities -- come from accepted authoritative ontologies. They are maintained by communities of experts, revised through consensus, and trusted precisely because they represent the accumulated judgment of the field. When you assign a canonical ID to an entity, you are not merely collapsing synonyms. You are connecting that entity to the history of human thought as far as that entity is concerned: its definition, its place in the taxonomy, its relationships to other concepts that the community has already established and agreed upon. A knowledge graph built on canonical IDs is not just a graph of facts -- it is a graph that inherits the epistemic authority of the ontologies it anchors to. That inheritance is what makes the graph trustworthy across sources, across time, and across the boundary between human expertise and machine reasoning.
+But the stakes go deeper than deduplication. Canonical identity doesn't just help you say that two things are the same. It places those things within the body of human knowledge. The identifiers that matter -- MeSH or UMLS CUI for medical concepts (UMLS is perhaps the more complete resource, but requires a licensed API key; for development purposes MeSH is free and sufficient), Gene Ontology terms for molecular function, DBPedia URIs for cross-domain entities -- come from accepted authoritative ontologies. They are maintained by communities of experts, revised through consensus, and trusted precisely because they represent the accumulated judgment of the field. When you assign a canonical ID to an entity, you are not merely collapsing synonyms. You are connecting that entity to the history of human thought as far as that entity is concerned: its definition, its place in the taxonomy, its relationships to other concepts that the community has already established and agreed upon. A knowledge graph built on canonical IDs is not just a graph of facts -- it is a graph that inherits the epistemic authority of the ontologies it anchors to. That inheritance is what makes the graph trustworthy across sources, across time, and across the boundary between human expertise and machine reasoning.
 
 ### What a KG Is Good For
 
@@ -581,7 +581,7 @@ The limitation is coverage. These graphs contain what was explicitly encoded. Th
 
 ### Curated Graphs at Scale
 
-Wikidata, Freebase before it, and DBpedia represent a different model: human curation at scale. Millions of entities, millions of relationships, maintained by a community of contributors who add facts, correct errors, and resolve disputes through discussion and consensus. The result is a graph that spans many domains, with reasonable quality where the community has focused effort, and gaps where it has not.
+Wikidata,\index{Wikidata} Freebase\index{Freebase} before it, and DBpedia represent a different model: human curation at scale. Millions of entities, millions of relationships, maintained by a community of contributors who add facts, correct errors, and resolve disputes through discussion and consensus. The result is a graph that spans many domains, with reasonable quality where the community has focused effort, and gaps where it has not.
 
 What this achieves is remarkable. A single query can retrieve structured information about a person, a place, a chemical, a historical event -- with identifiers that are stable, with relationships that are typed, with provenance that points to sources. For many applications, that is enough. The cost is the cost of human labor: curation does not scale to the full breadth of human knowledge, and it scales least well to domains where the knowledge is technical, specialized, or rapidly evolving. Encyclopedia articles can be curated. The full text of the medical literature cannot.
 
@@ -597,11 +597,11 @@ The free cases also illustrate the shape of the gap. It is not that extraction i
 
 ### Hybrid Approaches
 
-Most real knowledge graphs combine extraction with structured sources. The typical pattern: extract entities and relationships from text, then link the extracted entities to authoritative identifiers from a curated database or ontology. A drug mention in a paper is resolved to an RxNorm code. A disease mention is resolved to a UMLS CUI. A gene mention is resolved to an HGNC identifier. The extraction provides the coverage -- the connections that appear in the literature. The authority lookup provides the identity -- the canonical form that makes those connections comparable across sources.
+Most real knowledge graphs combine extraction with structured sources. The typical pattern: extract entities and relationships from text, then link the extracted entities to authoritative identifiers from a curated database or ontology. A drug mention in a paper is resolved to an RxNorm code. A disease mention is resolved to a MeSH term. A gene mention is resolved to an HGNC identifier. The extraction provides the coverage -- the connections that appear in the literature. The authority lookup provides the identity -- the canonical form that makes those connections comparable across sources.
 
 This hybrid approach does not make the extraction problem go away. It constrains it. Instead of inventing identifiers from scratch, the extractor (or a downstream resolution pass) maps to an existing vocabulary. That mapping is itself a form of extraction -- the model must recognize that "ketoconazole" in the text refers to the same thing as RxNorm's concept for ketoconazole -- but it is a narrower problem than inventing a full schema and populating it from scratch. The schema, or at least the entity vocabulary, is given by the authority. The extraction fills in the relationships and the provenance.
 
-The medical literature example in Part III follows this pattern. Entities are extracted from papers and resolved to UMLS, HGNC, RxNorm, or provisional IDs when no authority match exists. The Gene Ontology and other ontologies provide a backbone for relationship types. The result is a graph that combines the coverage of extraction with the identity resolution of curated sources. It is not a free KG -- extraction is central -- but it is not a purely extracted KG either. The hybrid is the norm, and understanding both the extraction side and the structured side is necessary to build one well.
+The medical literature example in Part III follows this pattern. Entities are extracted from papers and resolved to MeSH, HGNC, RxNorm, or provisional IDs when no authority match exists. The Gene Ontology and other ontologies provide a backbone for relationship types. The result is a graph that combines the coverage of extraction with the identity resolution of curated sources. It is not a free KG -- extraction is central -- but it is not a purely extracted KG either. The hybrid is the norm, and understanding both the extraction side and the structured side is necessary to build one well.
 
 ## Chapter 8: Designing Your Schema
 
@@ -609,7 +609,7 @@ The medical literature example in Part III follows this pattern. Entities are ex
 
 This is the chapter that might surprise readers who came for the engineering. Schema design is not primarily a technical exercise. It is where decisions are made about what the domain *is* -- what counts as an entity, what kinds of relationships matter, what level of granularity is useful. These are epistemological decisions, and they determine everything downstream. A poorly designed schema will produce a graph that cannot support the reasoning it was built for, no matter how good the extraction pipeline. A well-designed schema makes extraction easier, validation straightforward, and evolution manageable.
 
-### Schema Design as Intellectual Work
+### Schema Design as Intellectual Work\index{schema design}
 
 The temptation is to treat schema design as a matter of picking entity types and relationship names from a list -- a checklist exercise that can be delegated or done quickly. That approach produces schemas that look reasonable on paper and fail in practice. The real work is understanding the domain well enough to know what distinctions matter for the questions the graph will answer.
 
@@ -669,13 +669,17 @@ A single source of truth for domain specifics pays off here. When entity types, 
 
 `\chaptermark{Diagnostic Tools}`{=latex}
 
-The single most valuable diagnostic tool I have found is a good visualization view for the graph. Mine is done using the D3.js library's "force" example, where nodes and edges are treated like masses and springs floating in a 2-D space. A well-designed graph explorer does more than render nodes and edges -- it gives you the controls to interrogate the graph and diagnose what's in it.
+The single most valuable diagnostic tool I have found is a good visualization view for the graph. Mine is done using the D3.js\index{D3.js} library's "force" example, where nodes and edges are treated like masses and springs floating in a 2-D space. A well-designed graph explorer does more than render nodes and edges -- it gives you the controls to interrogate the graph and diagnose what's in it.
 
 What can you learn from graph visualization as a diagnostic? Plenty. You can quickly determine whether you've got duplicate entities, whether entities that *should* be connected *are* connected as you'd expect, whether the graph is highly interconnected overall or is a collection of islands. All these are very useful hints about what's working, and what isn't, in how you generate your graph from the input data you accept.
 
 ![](GraphVisualization.png)
 
-**Search by name or by canonical ID.** The interface should support both. Searching by name -- "breast cancer," "ketoconazole," "Cushing's disease" -- is how you explore when you're thinking in domain terms. Searching by Entity ID -- a UMLS CUI, an HGNC symbol, an RxNorm code -- is how you verify that canonical identity is working. If you enter `UMLS:C00068826` and the graph loads the expected entity with its relationships, you've confirmed that your authority lookup and resolution pipeline are functioning. If the ID returns nothing, or returns the wrong entity, you've found a bug. The ability to query by canonical ID turns identity resolution from an opaque pipeline stage into something you can inspect directly.
+**Search by name or by canonical ID.** The interface should support both. Searching by name -- "breast cancer," "ketoconazole," "Cushing's disease"\index{Cushing's disease} -- is how you explore when you're thinking in domain terms. Searching by Entity ID -- an HGNC symbol, an RxNorm code, a MeSH term -- is how you verify that canonical identity is working. If you enter `MeSH:D000072716` and the graph loads the entity for "cancer" with its relationships, you've confirmed that your authority lookup and resolution pipeline are functioning. If the ID returns nothing, or returns the wrong entity, you've found a bug. The ability to query by canonical ID turns identity resolution from an opaque pipeline stage into something you can inspect directly.
+
+Note on authority coverage: UMLS is the gold-standard disease authority for medical literature but requires a licensed API key. The medlit reference implementation uses MeSH as its primary disease authority (free, no key required) and falls back to DBPedia for concepts not covered by MeSH. Your domain may have different constraints; the diagnostic interface works the same way regardless of which authority IDs you assign.
+
+**Entity ID as a navigable link.** When the detail panel shows an entity's canonical ID, that ID should link directly to the authority source -- `MeSH:D000072716` links to the MeSH Browser, `HGNC:4556` links to the HGNC gene page, `UniProt:P04637` links to the UniProt entry. This turns the entity panel from a dead display into a live bridge between your graph and the authoritative sources it draws from. A researcher who wants to verify a canonical assignment or read the full authority record can do so in one click. Provisional entities (those with internal `prov:` IDs, not yet resolved to any authority) display their ID as plain text.
 
 **Traversal controls: hops and node limits.** A graph with thousands of entities is unreadable if you try to display it all at once. The diagnostic interface needs controls for scope. *Hops* -- how many steps outward from the seed entity -- determines how much of the neighborhood you see. One hop shows direct neighbors; two hops shows neighbors of neighbors, revealing indirect connections that might not be obvious from the raw data. *Max nodes* caps the display size for performance and readability. Together, these controls let you explore dense regions without overwhelming the renderer or your own perception. They also surface structural questions: if you expect an entity to have many connections but see few at two hops, either the graph is sparse in that region or your extraction missed relationships.
 
@@ -719,7 +723,7 @@ It's also how you debug pipeline regressions. If extraction quality drops after 
 
 And it's how you answer the question every serious user will eventually ask: "Why does the graph say this?" A graph that can't answer that question is a black box. A graph that can produce, for any relationship, the list of sources that support it, with enough detail to verify, is a tool you can trust.
 
-### Confidence as a Signal, Not a Guarantee
+### Confidence as a Signal, Not a Guarantee\index{confidence score}
 
 LLMs can be prompted to produce confidence scores alongside their extractions. "How confident are you that this relationship holds, on a scale of 1 to 5?" The model will give you a number. That number is useful. It correlates with extraction quality: relationships the model is confident about tend to be more reliable than ones it's uncertain about. You can use it to filter, rank, or weight results. It's worth capturing.
 
@@ -747,12 +751,12 @@ If you do need provenance at query time, design for it from the start. The query
 
 `\chaptermark{The Identity Server}`{=latex}
 
-The identity server is the authoritative component for entity identity across the knowledge graph. It handles the full lifecycle of an entity's identity: resolving a mention to an ID, promoting a provisional entity to canonical status, detecting synonyms, and merging duplicates into a single survivor. All of this must be correct under concurrent access from multiple worker processes and multiple server
+The identity server\index{identity server} is the authoritative component for entity identity across the knowledge graph. It handles the full lifecycle of an entity's identity: resolving a mention to an ID, promoting a provisional entity to canonical status, detecting synonyms, and merging duplicates into a single survivor. All of this must be correct under concurrent access from multiple worker processes and multiple server
 replicas.
 
-There are a number of authoritative ontologies in the world of medical literature: UMLS for diseases, HGNC for genes, RxNorm for drugs, and others. These are universally known, meticulously maintained, and trusted in that world. The stakes in medicine are high, and the care given to these ontologies reflects that.
+There are a number of authoritative ontologies in the world of medical literature: MeSH\index{MeSH} for diseases, HGNC\index{HGNC} for genes, RxNorm\index{RxNorm} for drugs, and others. These are universally known, meticulously maintained, and trusted in that world. The stakes in medicine are high, and the care given to these ontologies reflects that.
 
-### Identity Is Load-Bearing
+### Identity Is Load-Bearing\index{entity resolution}\index{canonical entity}
 
 Canonical entities with canonical IDs are the design decision that most separates a useful knowledge graph from a sophisticated extraction exercise. Everything else in the pipeline -- extraction, schema design, provenance tracking -- is in service of this. Without it, you have a collection of mentions that look like a graph but don't support the reasoning you want. With it, you have a structure where "this drug treats this disease" means the same thing whether it came from a 2010 review article or a 2024 clinical trial, because both references resolve to the same nodes.
 
@@ -766,21 +770,21 @@ A concrete illustration from medlit: a single gene across a corpus of thousands 
 
 Multiply that across every entity type in every document. Genes, drugs, diseases, proteins, symptoms, procedures. Each has its own nomenclature, its own abbreviation culture, its own history of naming changes. A drug might appear under its generic name, its brand names in multiple countries, its chemical structure name, a trial identifier, or a lab shorthand. A disease might appear under its ICD code name, a colloquial term, a syndrome eponym, or a molecular subtype designation. Identity resolution isn't a detail you handle in a weekend. It's the central challenge of building a graph that spans diverse sources.
 
-The scale compounds. A corpus of 100,000 documents might produce millions of entity mentions. Many of those mentions will be duplicates in disguise. The deduplication problem -- clustering mentions that refer to the same thing -- is computationally tractable but requires care. The resolution problem -- mapping each cluster to a canonical identity -- is where domain knowledge and authority sources become essential.
+The scale compounds. A corpus of 100,000 documents might produce millions of entity mentions. Many of those mentions will be duplicates in disguise. The deduplication\index{deduplication} problem -- clustering mentions that refer to the same thing -- is computationally tractable but requires care. The resolution problem -- mapping each cluster to a canonical identity -- is where domain knowledge and authority sources become essential.
 
-### Canonical IDs as Primary Keys
+### Canonical IDs as Primary Keys\index{canonical ID!as primary key}
 
 The design decision to treat canonical IDs as the primary key rather than derived metadata sounds like an implementation detail. It has deep consequences.
 
-If the primary key is something you derive -- a hash of the normalized name, say, or an auto-incrementing integer you assign at ingestion -- then identity is an internal concern. Your graph is self-contained. It works, but it doesn't connect to anything else. You can't easily link to external databases that use UMLS CUIs or HGNC symbols, because your IDs don't match theirs. You can't ingest a new corpus and merge it with an existing one without re-resolving everything. The graph is an island.
+If the primary key is something you derive -- a hash of the normalized name, say, or an auto-incrementing integer you assign at ingestion -- then identity is an internal concern. Your graph is self-contained. It works, but it doesn't connect to anything else. You can't easily link to external databases that use MeSH terms or HGNC symbols, because your IDs don't match theirs. You can't ingest a new corpus and merge it with an existing one without re-resolving everything. The graph is an island.
 
-If the primary key is a canonical ID from an established authority -- a UMLS CUI for a disease, an HGNC symbol for a gene, an RxNorm code for a drug -- then identity is a shared concern. Your graph speaks the same language as the rest of your domain. New documents can be ingested and their entities resolved against the same authorities. External systems can query your graph by the IDs they already use. The graph is interoperable.
+If the primary key is a canonical ID from an established authority -- a MeSH term for a disease, an HGNC symbol for a gene, an RxNorm code for a drug -- then identity is a shared concern. Your graph speaks the same language as the rest of your domain. New documents can be ingested and their entities resolved against the same authorities. External systems can query your graph by the IDs they already use. The graph is interoperable.
 
 Treating canonical IDs as primary keys also forces the right question at the right time. At ingestion, you must answer "what is this entity, really?" You can't defer it to query time, because the graph structure depends on the answer. That forces you to build resolution into the pipeline rather than bolting it on later, when retrofitting is painful.
 
 ### Authority Lookup
 
-In medicine there are established ontological authorities: UMLS for diseases and symptoms, HGNC for genes, RxNorm for drugs, UniProt for proteins. These are curated, maintained, and widely used. When your extraction produces "ketoconazole," you can look it up in RxNorm and get back a canonical drug ID. When it produces "Cushing's disease," you can look it up in UMLS and get back a CUI. The authority does the work of disambiguation -- "Cushing's disease" (pituitary adenoma) versus "Cushing's syndrome" (the broader clinical picture) -- and gives you a stable identifier for each.
+In medicine there are established ontological authorities: MeSH for diseases and symptoms, HGNC for genes, RxNorm for drugs, UniProt\index{UniProt} for proteins. These are curated, maintained, and widely used. When your extraction produces "ketoconazole," you can look it up in RxNorm and get back a canonical drug ID. When it produces "Cushing's disease,"\index{Cushing's disease} you can look it up in MeSH and get back a term ID. The authority does the work of disambiguation -- "Cushing's disease" (pituitary adenoma) versus "Cushing's syndrome"\index{Cushing's syndrome} (the broader clinical picture) -- and gives you a stable identifier for each.
 
 Your domain may have equivalents. Legal documents have citation systems; a case or statute can be identified by a standard citation format. Chemistry has InChI and SMILES; a compound can be identified by its structure. Geography has gazetteers and coordinate systems. Library science has ISBNs and OCLC numbers. If your domain has established identifiers, use them. They exist precisely because the domain has an identity problem and the community has invested in solving it.
 
@@ -790,23 +794,45 @@ If your domain doesn't have established authorities, you have choices. You can m
 
 When an entity arrives from extraction with a name but no ID, you need a lookup strategy. The naive approach -- send every string to the authority API and hope for a match -- doesn't scale. Authority APIs have rate limits, latency, and cost. You need a chain: try the cheap, fast options first; escalate to the expensive ones only when necessary.
 
-Exact match first. Normalize the string -- lowercase, trim whitespace, expand common abbreviations if you have a mapping -- and look it up. Many entities will resolve this way. "Aspirin" in RxNorm, "BRCA1" in HGNC, "type 2 diabetes mellitus" in UMLS. If exact match fails, try fuzzy match. The authority may have "acetylsalicylic acid" when you have "acetyl salicylic acid." Levenshtein distance, or a proper fuzzy matching library tuned to your domain, can find near-misses. Be careful: fuzzy matching can produce false positives. "ACE" might fuzzy-match to "ache" or "ice" if you're not constrained to the right vocabulary.
+Exact match first. Normalize the string -- lowercase, trim whitespace, expand common abbreviations if you have a mapping -- and look it up. Many entities will resolve this way. "Aspirin" in RxNorm, "BRCA1" in HGNC, "type 2 diabetes mellitus" in MeSH. If exact match fails, try fuzzy match.\index{fuzzy matching} The authority may have "acetylsalicylic acid" when you have "acetyl salicylic acid." Levenshtein distance, or a proper fuzzy matching library tuned to your domain, can find near-misses. Be careful: fuzzy matching can produce false positives. "ACE" might fuzzy-match to "ache" or "ice" if you're not constrained to the right vocabulary.
 
-When string-based matching fails, embedding-based reranking can help. Take the entity mention and the candidate matches from the authority, compute embeddings for both, and rank by similarity. This catches semantic matches that string distance misses -- "the gene encoding the tumor suppressor" might embed close to "BRCA1" even though the strings share no characters. Embedding search is more expensive and noisier than exact match, so it belongs later in the chain.
+When string-based matching fails, embedding-based reranking\index{embedding similarity} can help. Take the entity mention and the candidate matches from the authority, compute embeddings for both, and rank by similarity. This catches semantic matches that string distance misses -- "the gene encoding the tumor suppressor" might embed close to "BRCA1" even though the strings share no characters. Embedding search is more expensive and noisier than exact match, so it belongs later in the chain.
 
 The hard part is knowing when to accept a match and when to leave an entity provisional. Too aggressive, and you get false merges: two distinct entities collapsed into one, with relationships from both now incorrectly attached to a single node. Too conservative, and you get missed merges: duplicates in the graph, with the same entity appearing under multiple nodes and your aggregation undercounting the evidence. False merges are generally worse than missed merges -- they corrupt the graph in ways that are hard to detect and fix -- but the right threshold depends on your domain and what you're doing with the graph. A graph for hypothesis generation might tolerate more missed merges; a graph for clinical decision support might need to be more conservative about false merges.
 
-### Provisional Entities and Promotion
+### Provisional Entities and Promotion\index{provisional entity}\index{promotion (entity)}
 
-Not everything gets resolved immediately, and that's fine. A novel compound from a paper published last month might not be in RxNorm yet. A rare disease variant might not have a UMLS CUI. An institution-specific abbreviation might not map to any authority. These entities still have relationships; they still belong in the graph. They live as provisional entities -- nodes with a stable internal ID but no canonical authority ID -- until enough evidence accumulates, a better lookup succeeds, or a human reviewer makes a call.
+Not everything gets resolved immediately, and that's fine. A novel compound from a paper published last month might not be in RxNorm yet. A rare disease variant might not have a MeSH term. An institution-specific abbreviation might not map to any authority. These entities still have relationships; they still belong in the graph. They live as provisional entities\index{provisional entity} -- nodes with a stable internal ID but no canonical authority ID -- until enough evidence accumulates, a better lookup succeeds, or a human reviewer makes a call.
 
 The promotion mechanism is the set of thresholds that govern when a provisional entity earns canonical status. In medlit, the logic is roughly: if a provisional entity appears in enough documents with enough consistency, and if a human has confirmed it or an authority has added it, promote it. The exact thresholds -- how many documents, what consistency, what confirmation -- are tunable and domain-specific. Medlit's thresholds reflect LLM extraction characteristics in a medical context: how often the same entity is mentioned across papers, how often extraction produces spurious variants, how often a provisional entity turns out to be a real thing worth promoting versus noise. Your domain may have different dynamics. Design for your domain rather than borrowing wholesale.
 
 Provisional entities are not second-class. They participate in the graph fully. They can have relationships, appear in traversals, and show up in query results. The difference is that they don't have an external canonical ID yet, which means they're not interoperable with systems that expect one. For many use cases, that's acceptable. For others, you'll want a human-in-the-loop process to review high-value provisional entities and either promote them (with a minted ID or a newly available authority match) or merge them into existing canonical entities.
 
+### Provenance-Derived Entities and the Citation Graph
+
+Not all entities in the graph come from LLM extraction. Some are derived from document metadata and structure, without touching the model at all. These *provenance-derived* entities are more reliable than extracted ones -- they come from authoritative structured fields in the source document rather than from LLM interpretation of prose -- and they carry their own class of relationships that are worth treating specially.
+
+In medlit, each ingested paper automatically contributes a set of provenance-derived entities and relationships:
+
+- **Paper** entities (one per ingested document, with its PMC ID as canonical ID)
+- **Author** entities (one per credited author)
+- **Institution** entities (one per author affiliation)
+- `AUTHORED(Author, Paper)` relationships
+- `AFFILIATED_WITH(Author, Institution)` relationships
+- `DESCRIBED(Paper, entity)` relationships linking each paper to the domain entities most central to it
+- `CITES(Paper, Paper)` relationships derived from the paper's reference list
+
+The `CITES` relationships deserve particular attention. Scientific papers include a structured reference list -- in JATS XML,\index{JATS XML} the `<ref-list>` element -- that names every paper they cite, often with a PMC ID. These citations are parsed directly from the XML and turned into `CITES` edges in the graph, no LLM required. Each cited paper that appears in the reference list becomes a `Paper` entity in the graph, and its outgoing `CITES` edge is asserted with confidence 1.0. This is reliable provenance: the citation relationship is a fact recorded by the authors, not an inference by an extraction model.
+
+The citation graph produced this way is valuable in its own right. It surfaces the intellectual neighborhood of your corpus: which papers cite which, which papers are frequently cited, which are co-cited. Papers that are cited by many papers in your corpus but not yet ingested themselves become natural candidates for corpus expansion -- the reference list is a built-in discovery mechanism for related literature.
+
+There is one practical gap: a cited paper that has not been ingested is a stub -- a `Paper` entity with a PMC ID as its canonical identifier but only that ID as its name, since no extraction has run on it. Resolving this is straightforward: NCBI's `esummary` API accepts batches of PMC IDs and returns titles, making it possible to populate the `name` field for all stub papers in a single pass of five or so HTTP requests regardless of how many citations are in the corpus. This is much faster than ingesting each paper, and title resolution is all you need for the citation graph to be human-readable.
+
+The identity server handles provenance-derived entities with a short-circuit path: if an entity arrives with an authoritative canonical ID already set (e.g. a PMC ID for a cited paper), the identity server skips the authority lookup and uses that ID directly. This is both faster and more reliable than routing a PMC ID through a name-based lookup chain.
+
 ### Responsibilities
 
-1. **Canonical ID assignment.** Given a surface-form mention, return a stable entity ID — canonical if an authoritative external source (UMLS, HGNC, MeSH, etc.) provides one, provisional otherwise. A provisional entity is promotable once domain-defined thresholds are met.
+1. **Canonical ID assignment.** Given a surface-form mention, return a stable entity ID — canonical if an authoritative external source (MeSH, HGNC, RxNorm, etc.) provides one, provisional otherwise. A provisional entity is promotable once domain-defined thresholds are met.
 2. **Promotion.** Elevate a provisional entity to canonical status when the domain's promotion policy determines that sufficient evidence has accumulated.  Promotion is a one-time, irreversible transition.
 3. **Synonym recognition.** Detect when two entities refer to the same real-world concept, using domain-defined criteria such as vector similarity, shared external identifiers, or string normalization.
 4. **Merging.** Collapse duplicate entities into a single survivor, redirecting all references from absorbed entities to the survivor. Absorbed entities are retained — not deleted — so that stale external references remain resolvable via a single redirect lookup.
@@ -937,7 +963,7 @@ The identity server ABC deliberately leaves the following decisions to the domai
 
 | Concern | Where it lives |
 |---|---|
-| Authority lookup | Domain implementation (e.g. UMLS API, DBPedia SPARQL, no-op) |
+| Authority lookup | Domain implementation (e.g. MeSH API, DBPedia SPARQL, no-op) |
 | Synonym criteria | Domain implementation (e.g. cosine similarity threshold, shared CUI) |
 | Merge survivor selection | `DomainSchema.preferred_entity` |
 | Promotion thresholds | Domain `PromotionPolicy` |
@@ -971,7 +997,7 @@ Entities carry one of three statuses:
 | Status | Meaning |
 |---|---|
 | `provisional` | Created from a mention with no authoritative external ID. Promotable via the domain promotion policy. |
-| `canonical` | Has a stable external ID (e.g. UMLS CUI, MeSH term) or has been promoted. Promotion is a one-time transition. |
+| `canonical` | Has a stable external ID (e.g. MeSH term, HGNC symbol) or has been promoted. Promotion is a one-time transition. |
 | `merged` | Absorbed into another entity. Retained for redirect lookups via `merged_into`. Excluded from normal queries. |
 
 #### Merge × Promotion Status Rules
@@ -1023,11 +1049,11 @@ Authority lookup is a network call and is not idempotent in the face of transien
 
 **Negative caching** — a "no canonical match" result is also cached with a shorter TTL, so a mention that later acquires an authoritative ID does not remain provisional indefinitely.
 
-**Cache key versioning** — keys are prefixed with the authority source version, e.g. `resolve:umls:v2026.01:{mention}`. A new UMLS release is handled by flushing or re-keying without invalidating unrelated entries.
+**Cache key versioning** — keys are prefixed with the authority source version, e.g. `resolve:mesh:v2026:{mention}`. A new MeSH release is handled by flushing or re-keying without invalidating unrelated entries.
 
 **Residual risk** — if the API call succeeds but the process crashes before the DB insert commits, a retry hits the cache, gets the canonical ID, and re-attempts the insert. `ON CONFLICT DO NOTHING` handles this correctly.
 
-#### Synonym Detection via pgvector
+#### Synonym Detection via pgvector\index{pgvector}
 
 `find_synonyms` uses vector embeddings and cosine similarity via the `pgvector` extension. Approximate nearest-neighbour search at scale is its core capability, and keeping similarity queries inside Postgres means they share the same transaction boundary as entity operations with no additional service.
 
@@ -1058,13 +1084,20 @@ Redis is required only for authority lookup caching in `resolve`. If authority l
 
 The temptation is to do extraction end-to-end in one shot: send the document to the model, get back entities and relationships, done. That approach fails at scale for reasons that are worth stating explicitly. A single monolithic pass has a single point of failure -- if anything goes wrong, you restart from scratch. It produces output that is hard to debug, because you can't inspect intermediate states. And it conflates concerns that are better handled separately: entity extraction, identity resolution, relationship extraction, and assembly are different problems with different failure modes and different recovery strategies.
 
-Staging the pipeline into multiple passes addresses all of this. Each pass has a well-defined input and output. Failures are recoverable: if Pass 2 fails on document 47, you fix the issue and rerun Pass 2 from document 47, not from document 1. Intermediate artifacts are inspectable -- you can look at the raw entity extractions before resolution, or the resolved entities before relationship extraction, and see exactly where the pipeline went wrong. The per-document bundle becomes the natural unit of work between passes: each document produces a bundle that can be validated, cached, and merged independently. None of this is medlit-specific. It's good pipeline design for any extraction problem at non-trivial scale.
+Staging the pipeline into multiple passes addresses all of this. Each pass has a well-defined input and output. Failures are recoverable: if the extraction pass fails on document 47, you fix the issue and rerun that pass from document 47, not from document 1. Intermediate artifacts are inspectable -- you can look at the raw entity extractions before resolution, or the resolved entities before relationship extraction, and see exactly where the pipeline went wrong. The per-document bundle becomes the natural unit of work between passes: each document produces a bundle that can be validated, cached, and merged independently. None of this is medlit-specific. It's good pipeline design for any extraction problem at non-trivial scale.
 
-The medlit pipeline uses a two-pass architecture: Pass 1 extracts entities and resolves them to canonical or provisional IDs; Pass 2 extracts relationships between those resolved entities. That ordering matters. You need a consistent entity vocabulary before you can reliably extract relationships -- "this drug treats this disease" is only useful if "this drug" and "this disease" have been resolved to the same nodes across the document. Other orderings are possible, but the principle holds: separate concerns, make each pass debuggable, design for partial failure and restart.
+The medlit batch pipeline uses four stages, each with its own script and a well-defined artifact at its output:
+
+1. **Vocabulary** (`fetch_vocab`): LLM pass over all papers to build a shared vocabulary of canonical entity names and their aliases. Output: `vocab.json` and a seeded synonym cache.
+2. **Extract** (`extract`): LLM entity and relationship extraction for each paper, using the vocabulary as context. Output: per-paper `paper_*.json` artifact files in the `extracted/` directory.
+3. **Ingest** (`ingest`): Identity-server-based deduplication and canonical ID assignment across all extracted bundles. Output: `entities.json`, `relationships.json`, and an ID map in `merged/`.
+4. **Build bundle** (`build_bundle`): Assembles the kgbundle -- the loadable artifact consumed by kgserver. Fetches titles for cited papers from NCBI `esummary`. Output: `entities.jsonl`, `relationships.jsonl`, and supporting files in `bundle/`.
+
+That ordering matters. You need a consistent entity vocabulary before extraction can use it. You need resolved entity IDs before you can aggregate relationships across documents. And you need the aggregated merged output before you can build the final bundle. Other orderings are possible, but the principle holds: separate concerns, make each pass debuggable, design for partial failure and restart.
 
 ### Parsing: Getting to Text
 
-Whatever your source format, you need to get to structured text before you can extract anything. The model reads text; it doesn't read PDF layout or XML tags. JATS XML -- the format used by PubMed Central -- is medlit's case: a structured representation of journal articles with metadata, abstract, and body sections. Yours might be PDFs, HTML, EPUB, proprietary formats, or plain text that's already clean. The parser's job is to produce a document representation that preserves structure the extractor can use: section boundaries, paragraph boundaries, and the actual text content.
+Whatever your source format, you need to get to structured text before you can extract anything. The model reads text; it doesn't read PDF layout or XML tags. JATS XML\index{JATS XML} -- the format used by PubMed Central -- is medlit's case: a structured representation of journal articles with metadata, abstract, and body sections. Yours might be PDFs, HTML, EPUB, proprietary formats, or plain text that's already clean. The parser's job is to produce a document representation that preserves structure the extractor can use: section boundaries, paragraph boundaries, and the actual text content.
 
 Two decisions matter regardless of format. First, how do you identify section boundaries? In scientific papers, the distinction between Methods, Results, and Discussion carries semantic weight -- a claim in Results is different from a claim in Discussion. In legal documents, sections and subsections matter for citation. The parser should expose this structure so downstream passes can use it. Second, how do you chunk for extraction? Documents are often too long to send to the model in one call. Chunk too small and you lose context -- the referent of "it" or "the compound" may be in the previous chunk. Chunk too large and you exceed model context limits, dilute the signal, or hit token budgets that make the run expensive. Overlapping chunks can help: each sentence appears in at least one chunk, so no sentence is orphaned at a boundary. Sentence boundaries are a practical constraint worth respecting -- splitting mid-sentence produces fragments that are harder for the model to interpret correctly.
 
@@ -1074,15 +1107,19 @@ This is where your schema meets the text. The extraction prompt is not a generic
 
 The tradeoff between prompt specificity and prompt flexibility is real. A highly specific prompt -- "extract only direct assertions, ignore speculative language, require explicit subject-verb-object structure" -- tends to produce higher precision and lower recall. The model extracts less, but what it extracts is more reliable. A more flexible prompt -- "extract any relationship that might be implied, include hedged claims" -- tends to produce higher recall and lower precision. You get more relationships, but more of them will need filtering or correction. There's no universal right answer. The right balance depends on your domain, your tolerance for noise, and what you're doing with the graph. Iteration over the prompt is the design method. You run extraction on a sample, inspect the output, adjust the prompt, repeat. There's no shortcut.
 
-### A Note on Vocabulary
+### Vocabulary: Building a Shared Terminology
 
-The medlit pipeline has an explicit vocabulary pass that runs alongside or after extraction. The idea: before you try to resolve "BRCA1," "breast cancer gene 1," and "BRCA1 protein" to the same entity, you establish a shared vocabulary of entity names and their variants. The vocabulary pass can use the same LLM that does extraction -- "given these entity mentions from the document, list the canonical names and aliases for each" -- or it can be a separate step that clusters mentions and assigns preferred forms. Not every domain needs this. If your corpus uses relatively consistent terminology, extraction may produce sufficiently normalized output without it. But if your domain has heavy terminology -- medicine, law, chemistry, any field where the same concept has many names and many names map to the same concept -- something like this will pay off. The vocabulary pass reduces the load on the deduplication and resolution stages downstream. It's a form of schema binding: you're telling the model, before relationship extraction, what the canonical forms are so it can use them consistently.
+Before extraction, medlit runs a dedicated vocabulary pass over all the papers in the batch. The idea: before you try to resolve "BRCA1," "breast cancer gene 1," and "BRCA1 protein" to the same entity, you establish a shared vocabulary of entity names and their variants. A vocabulary pass asks the LLM a narrower, cheaper question than full extraction -- "given the text of this paper, list the distinct named entities you see and their common aliases" -- and aggregates the answers across all papers into a canonical name list.
+
+The output of the vocabulary pass feeds directly into extraction. When the extraction prompt runs for each paper, the shared vocabulary is injected as context: "these are the preferred names for entities seen across the corpus; use them." This keeps extraction consistent across workers and across time. Without it, two papers that both mention GPX4 might extract it as "GPX4," "glutathione peroxidase 4," and "phospholipid hydroperoxide glutathione peroxidase" in three different bundles, and identity resolution must sort them out later. With the vocabulary priming the extraction prompt, the model tends to use a consistent preferred form, reducing the deduplication burden downstream.
+
+Not every domain needs a vocabulary pass. If your corpus uses consistent terminology, extraction may produce sufficiently normalized output without it. But medicine, law, and chemistry -- any field where the same concept has many names and many names map to the same concept -- will see a measurable reduction in deduplication noise. Think of it as schema binding at the lexical level: you're telling the model what things are called before asking it to extract relationships among them.
 
 ### Deduplication
 
 The same entity extracted from many documents will appear under slightly different names. "Aspirin," "acetylsalicylic acid," "ASA," and "2-acetoxybenzoic acid" are one drug. "Type 2 diabetes," "T2DM," "diabetes mellitus type 2," and "adult-onset diabetes" are one disease. The deduplication stage groups mentions, resolves them to canonical forms, and handles the ambiguous cases. This is where the gap between "a list of extracted facts" and "a coherent graph" starts to close.
 
-The details vary by domain. In medicine, authority lookup -- UMLS, RxNorm, HGNC, and the rest -- does much of the work: many apparent synonyms resolve to the same canonical ID automatically. What remains after authority lookup is the residue: novel entities, institution-specific abbreviations, terms that aren't in any vocabulary yet. For those, you need other signals. Embedding similarity can help: mentions that are semantically close in embedding space may be the same entity. So can co-occurrence: if "compound X" and "imatinib" appear in the same document and the context suggests they're the same, that's evidence. The hard cases are the ambiguous ones -- "ACE" could be angiotensin-converting enzyme or the gene, "CRF" could be corticotropin-releasing factor or chronic renal failure. Resolving those may require context, domain heuristics, or human review. The universal part: you need a deduplication strategy, and it should run before or alongside relationship extraction so that relationships reference resolved entities, not raw strings.
+The details vary by domain. In medicine, authority lookup -- MeSH, RxNorm, HGNC, and the rest -- does much of the work: many apparent synonyms resolve to the same canonical ID automatically. What remains after authority lookup is the residue: novel entities, institution-specific abbreviations, terms that aren't in any vocabulary yet. For those, you need other signals. Embedding similarity can help: mentions that are semantically close in embedding space may be the same entity. So can co-occurrence: if "compound X" and "imatinib" appear in the same document and the context suggests they're the same, that's evidence. The hard cases are the ambiguous ones -- "ACE" could be angiotensin-converting enzyme or the gene, "CRF" could be corticotropin-releasing factor or chronic renal failure. Resolving those may require context, domain heuristics, or human review. The universal part: you need a deduplication strategy, and it should run before or alongside relationship extraction so that relationships reference resolved entities, not raw strings.
 
 ### Assembly
 
@@ -1217,44 +1254,65 @@ The batch runner accepts separate concurrency limits per stage. Running multiple
 
 ### Batch Ingestion
 
+The batch pipeline is driven by a shell script that sequences the four stages in order:
+
 ```bash
-python -m kgserver.ingest --input pmcids.txt --fetch-workers 4 --extract-workers 8 --ingest-workers 16
-python -m kgserver.ingest --pmcid PMC12345 PMC67890
+# Run all four stages over a named list of papers
+./run-ingest-new.sh --list ferroptosis      # two-paper test set
+./run-ingest-new.sh --list smorgasbord     # 39-paper corpus
 ```
 
-The batch runner inserts PMC IDs into `ingest_jobs` with `INSERT ... ON CONFLICT DO NOTHING` — papers already in the table are silently skipped — then launches worker pools for each stage. Multiple instances can run simultaneously across machines with no additional coordination.
+Each stage is a Python module invoked with `uv run python -m`:
+
+```bash
+# Stage 1: vocabulary
+uv run python -m examples.medlit.scripts.fetch_vocab \
+    --input-dir pmc_xmls --output-dir vocab --papers PMC12345.xml,...
+
+# Stage 2: extraction
+uv run python -m examples.medlit.scripts.extract \
+    --input-dir pmc_xmls --output-dir extracted \
+    --vocab-file vocab/vocab.json --papers PMC12345.xml,...
+
+# Stage 3: ingest (identity-server deduplication)
+uv run python -m examples.medlit.scripts.ingest \
+    --bundle-dir extracted --output-dir merged --use-identity-server
+
+# Stage 4: build bundle
+uv run python -m examples.medlit.scripts.build_bundle \
+    --merged-dir merged --bundles-dir extracted \
+    --output-dir bundle --pmc-xmls-dir pmc_xmls
+```
+
+Stages 1 and 2 are embarrassingly parallel at the paper level and can be run with multiple workers. Stage 3 parallelizes authority lookups (MeSH, UniProt, HGNC) within a single run using `asyncio.gather` with a semaphore, so HTTP calls to authority APIs happen concurrently rather than sequentially. Stage 4 is fast and single-threaded -- its main network cost is the batched NCBI `esummary` call for cited-paper titles, which takes only a handful of requests regardless of corpus size.
 
 ### MCP Tool
 
 The MCP tool is a convenience for a user who wants to pull in one or a few papers during a query session and have them available immediately. It is not intended for bulk operations.
 
+The tool calls the same underlying pipeline stages as the batch CLI -- fetch, extract, ingest, build bundle -- but runs them synchronously in a background thread so the MCP server stays responsive. If the paper has already been ingested, it returns immediately with a status message. For large lists of papers, use the batch CLI instead; the MCP tool is optimized for single-paper interactive use.
+
 ```python
 @mcp.tool()
-async def ingest_paper(pmcid: str) -> str:
+async def ingest_paper(pmcid: str) -> dict:
     """
-    Fetch, extract, and ingest a single paper into the knowledge graph.
-    The paper is available for querying immediately on return.
+    Fetch, extract, and ingest a single PMC paper into the knowledge graph.
+    Runs the full pipeline (fetch → extract → ingest → build_bundle) and
+    makes the paper available for querying on return.
     """
-    inserted = await db.execute(
-        "INSERT INTO ingest_jobs (pmcid, status) VALUES ($1, 'pending') "
-        "ON CONFLICT DO NOTHING",
-        pmcid
+    # Check if already ingested
+    existing = check_ingest_status(pmcid)
+    if existing == "done":
+        return {"status": "already_ingested", "pmcid": pmcid}
+
+    # Run all pipeline stages via the same function used by the batch worker
+    await asyncio.get_event_loop().run_in_executor(
+        None, _run_pass2_pass3_load, workspace, bundles_dir, merged_dir, output_dir
     )
-    if not inserted:
-        row = await db.fetchrow(
-            "SELECT status FROM ingest_jobs WHERE pmcid = $1", pmcid
-        )
-        if row["status"] == "done":
-            return f"{pmcid} is already in the knowledge graph."
-
-    await fetch_stage(pmcid)
-    await extract_stage(pmcid)
-    await ingest_stage(pmcid)
-
-    return f"{pmcid} ingested successfully."
+    return {"status": "ingested", "pmcid": pmcid}
 ```
 
-The tool runs the full pipeline inline and returns when the paper is available.  It writes to `ingest_jobs` so batch operations that encounter the same PMC ID later will skip it cleanly. For large lists of papers, use the batch CLI instead.
+The `_run_pass2_pass3_load` function is the shared implementation used by both the MCP tool and the background ingest worker. It runs `ingest`, `build_bundle`, and `load_bundle_incremental` in sequence, so that after it returns the paper is live in the graph without a server restart.
 
 ### Extraction Output Format
 
@@ -1333,25 +1391,24 @@ Key properties:
 
 ### Shared Pipeline Code
 
+The four pipeline stages share their core logic across both the batch CLI and the MCP/server path. The batch CLI calls stage scripts directly; the MCP tool and background ingest worker call `_run_pass2_pass3_load`, which sequences the ingest, build_bundle, and load_bundle_incremental steps using the same underlying functions:
+
 ```python
-async def fetch_stage(pmcid: str) -> None:
-    """Fetch raw text from PMC and store in ingest_jobs.raw_text."""
-
-async def extract_stage(pmcid: str) -> None:
-    """
-    Run LLM extraction using live graph context.
-    Store raw_extraction in ingest_jobs and write paper artifact file.
-    """
-
-async def ingest_stage(pmcid: str) -> None:
-    """
-    Write entities and relationships to the graph.
-    Calls identity_server.resolve() and on_entity_added() inside a single
-    transaction per paper.
-    """
+def _run_pass2_pass3_load(
+    workspace_root: Path,
+    bundles_dir: Path,
+    merged_dir: Path,
+    output_dir: Path,
+) -> None:
+    """Run ingest, build_bundle, and load_bundle_incremental. Raises on failure."""
+    run_ingest(bundle_dir=bundles_dir, output_dir=merged_dir, ...)
+    run_build_bundle(merged_dir, bundles_dir, output_dir)
+    load_storage.load_bundle_incremental(manifest, str(output_dir))
 ```
 
-The batch worker pools and the MCP tool all call these functions directly. The only difference is whether they are driven by a queue loop or a single inline call.
+`run_ingest` is the identity-server deduplication stage. `run_build_bundle` assembles the kgbundle including NCBI title fetching. `load_bundle_incremental` pushes the new bundle into the live graph storage without a restart.
+
+The vocabulary and extraction stages are not in this shared path -- they are CLI-only for batch runs, since interactive single-paper ingestion via the MCP tool skips the vocabulary pass (the vocabulary built from the existing corpus is already embedded in the seeded synonym cache). For the MCP use case, the paper is extracted with the current vocabulary as context, then ingested, and the bundle is rebuilt and reloaded.
 
 # Part IV: What It Makes Possible
 
@@ -1379,7 +1436,7 @@ At minimum, you need: entity lookup (by name or canonical ID), relationship enum
 
 Chapter 9 covered visualization as a diagnostic tool for pipeline development. Here the question is different: what does visualization do for an end user exploring the graph?
 
-A browsable, zoomable view of entities and relationships lets users navigate structure that would be tedious to reconstruct from query output. "Show me everything connected to this drug" produces a list; a force-directed layout produces a picture where clusters, bridges, and outliers are visible at a glance. For exploration and discovery -- "what's in this neighborhood?" "what connects these two things?" -- visualization often beats tabular output. The implementation cost is modest if you already have the query primitives; the value for users who think spatially about their domain is high. If you build nothing else on top of your graph, build this.
+A browsable, zoomable view of entities and relationships lets users navigate structure that would be tedious to reconstruct from query output. "Show me everything connected to this drug" produces a list; a force-directed layout\index{force-directed layout} produces a picture where clusters, bridges, and outliers are visible at a glance. For exploration and discovery -- "what's in this neighborhood?" "what connects these two things?" -- visualization often beats tabular output. The implementation cost is modest if you already have the query primitives; the value for users who think spatially about their domain is high. If you build nothing else on top of your graph, build this.
 
 ### Grounding LLM Inference
 
@@ -1389,7 +1446,7 @@ The mechanics are straightforward. A user asks a question. Your system retrieves
 
 The retrieval step matters. "Relevant" means different things for different questions. A question about a specific drug might need that drug's neighborhood, its indications, its interactions, and the evidence for each. A question about a disease might need the disease's subtypes, associated genes, known treatments, and the studies that support those links. Designing the retrieval logic -- what subgraph to fetch for what question -- is where domain knowledge enters. A generic "fetch entities mentioned in the question" often works; a retrieval strategy tuned to your schema and your users' question patterns works better. The graph gives you something to retrieve. The retrieval strategy determines how well the model uses it.
 
-### MCP as the Integration Point
+### MCP as the Integration Point\index{Model Context Protocol (MCP)}
 
 The Model Context Protocol is worth understanding as an architectural pattern, not just as a specific technology. The idea is that a knowledge graph should be a first-class context source for LLM-based systems -- something that agents, assistants, and reasoning pipelines can query as naturally as a human researcher would reach for a reference database. Whether you use MCP specifically or some other integration approach, the principle is sound: your graph is most powerful when it's actively grounding inference, not sitting passively waiting to be queried by humans.
 
@@ -1397,7 +1454,7 @@ MCP defines a standard way for AI systems to discover and call tools. A knowledg
 
 If you're not using MCP, the same pattern applies. The graph needs to be queryable by whatever system is doing the reasoning. REST, GraphQL, or a custom API all work. The architectural point is that the graph should be *available* to the reasoning layer, not a separate system that humans query manually. Passive retrieval -- human runs query, copies result, pastes into chat -- is a fallback. Active grounding -- the reasoning system queries the graph as part of generating its answer -- is the target.
 
-### BFS Queries
+### BFS Queries\index{breadth-first search (BFS)}
 
 This section is unusually detailed. I hope it will be helpful enough to justify that. Here I describe a JSON-based query language that I designed for my app. The guiding design principles were LLM friendliness, both in the use of JSON syntax and in the conservation of context window budget. Initially I favored GraphQL but later learned that LLMs really do prefer JSON. And context window is a precious commodity in LLM work.
 
@@ -1575,11 +1632,11 @@ Result: Full data on Publication nodes, full provenance on AUTHORED edges. Any o
 
 _Example 2: Explore a disease neighborhood, focusing on drugs_
 
-You want to understand what drugs are connected to Cushing's syndrome within two hops, without being overwhelmed by the full metadata of every gene, symptom, and pathway in the neighborhood.
+You want to understand what drugs are connected to Cushing's syndrome\index{Cushing's syndrome} within two hops, without being overwhelmed by the full metadata of every gene, symptom, and pathway in the neighborhood.
 
 ```json
 {
-  "seeds": ["UMLS:C0085084"],
+  "seeds": ["MeSH:D003480"],
   "max_hops": 2,
   "node_filter": {
     "entity_types": ["Drug"]
@@ -1684,7 +1741,7 @@ The scientific literature is not evenly distributed. A disproportionate share of
 
 Citation networks encode and amplify this. If you discover papers by following citations, you stay within the citation graph. Papers that nobody in your network cites are invisible to you. They might as well not exist. A knowledge graph built from a genuinely broad corpus -- including non-English sources, regional journals, preprints, and gray literature -- can surface relationships that the citation network never connects. The graph doesn't care that a paper was published in Portuguese or in a journal with an impact factor of 0.5. It cares that the extraction found a relationship. A query over that graph can return results that would never appear in a citation-based search.
 
-This isn't a panacea. Extraction quality varies by language and by how well the source matches the model's training distribution. Building a graph that truly spans the global literature requires deliberate effort: multilingual extraction, diverse source selection, and care that the pipeline doesn't silently drop or degrade non-standard inputs. But the capability is there. A well-constructed KG with broad sourcing can surface what citation networks systematically miss. For domains where important work happens outside the mainstream -- rare diseases, regional health issues, indigenous knowledge, applied research in developing countries -- that capability matters.
+This isn't a panacea. Extraction quality varies by language and by how well the source matches the model's training distribution. Building a graph that truly spans the global literature requires deliberate effort: multilingual extraction, diverse source selection, and care that the pipeline doesn't silently drop or degrade non-standard inputs. But the capability is there. A well-constructed KG with broad sourcing can surface what citation networks systematically miss. For domains where important work happens outside the mainstream -- rare diseases,\index{rare disease} regional health issues, indigenous knowledge, applied research in developing countries -- that capability matters.
 
 ### The Robot Scientist, Revisited
 
@@ -1710,7 +1767,7 @@ The countervailing reality is that building and maintaining a serious KG still r
 
 In drug discovery, the bottleneck is often synthesis -- not of molecules, but of knowledge. A promising target emerges from basic research. The relevant literature spans decades, multiple disciplines, and hundreds of papers. Someone has to read it, extract the key relationships, and figure out what's known, what's contested, and what's missing. That synthesis can take months. A functioning extraction pipeline and a well-constructed graph can compress it to days. The same is true in rare disease research, where the literature is scattered across case reports, small studies, and patient advocacy publications. And in materials science, where the space of possible compounds is vast and the literature connecting structure to properties is fragmented. In each of these domains, the bottleneck is not the underlying science; it's the human capacity to hold and connect what's already been published. A KG that does that synthesis automatically changes the pace of work. The researcher's time shifts from "what do we know?" to "what should we do next?" That shift is consequential.
 
-### The Rare Disease Problem
+### The Rare Disease Problem\index{rare disease}
 
 Rare diseases are underserved not because nobody cares but because no single community is large enough to see the full picture. A disease that affects one in fifty thousand people might have a few hundred papers published about it, scattered across decades and subdisciplines. No single clinician sees enough cases to develop deep expertise. No single researcher has the bandwidth to synthesize the full literature. The patient community is small and often fragmented. The result is that knowledge about rare diseases exists -- it's in the literature -- but it's never assembled in a form that any one person or group can use. Patients and their doctors are left to piece it together from whatever they can find.
 
