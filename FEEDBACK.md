@@ -66,7 +66,7 @@ The thesis is real and defensible. The historical grounding in Chapter 2 is unus
 
 The bones are good. The work is in the structure and in a few chapters that need either a full draft (Chapter 7) or a focused revision (Chapters 10, 13, 16).
 
-## More about the MCP thing
+## More about the Chapter 13 MCP thing
 
 Here's what those two revisions mean in concrete terms:
 
