@@ -65,3 +65,27 @@ My recommendation: define your reader as someone who can read Python fluently an
 The thesis is real and defensible. The historical grounding in Chapter 2 is unusual and valuable. The schema design chapter is genuinely useful in a way that most technical books aren't. The provenance-first architecture argument is consistent throughout and earns its weight. The closing argument — that the reasoning substrate will change but the grounding layer is a permanent architectural requirement — is the kind of claim that distinguishes a book from a long blog post.
 
 The bones are good. The work is in the structure and in a few chapters that need either a full draft (Chapter 7) or a focused revision (Chapters 10, 13, 16).
+
+## More about the MCP thing
+
+Here's what those two revisions mean in concrete terms:
+
+---
+
+**Revision 1: Sharpen MCP-as-active-contract**
+
+The current MCP section (lines 1449–1455) frames MCP as "an architectural pattern, not just a specific technology" and then immediately retreats to "if you're not using MCP, the same pattern applies, REST and GraphQL also work." That hedging undercuts the argument before it's made.
+
+The claim worth making — and that the chapter doesn't quite land — is that MCP represents a qualitative shift in how the graph participates in inference. The specific thing MCP provides that REST and GraphQL don't is *discoverability*: tools are self-describing, typed, and enumerable at runtime. An agent can query the server to learn what tools exist and what they do, without being pre-programmed for your specific schema. That makes the graph a first-class active participant in agentic reasoning rather than a passive endpoint that some human wired up in advance.
+
+The current text calls the looseness "a feature" but doesn't explain *why* it's a feature. The answer is: because the contract is machine-readable, the reasoning layer can adapt to schema changes without code changes on the consumer side. That's the architectural argument worth making explicitly, and it's currently absent.
+
+---
+
+**Revision 2: Graph visualization carve-out**
+
+The chapter has a "Graph Visualization" section (around line 1435) that discusses visualization for end users — navigation, discovery, force-directed layouts. Chapter 9 describes the D3.js diagnostic interface in considerable detail.
+
+The problem is that a reader who just read Chapter 9 might reasonably conclude: "I need to build that sophisticated force-directed explorer for my users." But the Chapter 9 visualization is *builder infrastructure* — it exists so you can see whether your pipeline is working correctly, spot duplicate entities, diagnose extraction failures. Its audience is you, not your end users.
+
+The carve-out should say explicitly: what Chapter 9 describes is a development and diagnostic tool. When this chapter talks about visualization for end users, that's a different design problem with different requirements — your users may want a simpler, curated view, not a full-graph diagnostic explorer. Don't conflate the two. Build the diagnostic one regardless; decide separately whether your users need a visualization layer and what form it should take.
