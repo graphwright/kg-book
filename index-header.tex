@@ -1,4 +1,12 @@
 \usepackage{makeidx}
+
+% Route pandoc's fenced code blocks through listings
+\usepackage{fvextra}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{
+  breaklines,breaksymbolleft={},
+  fontsize=\small,
+  commandchars=\\\{\}
+}
 \usepackage{idxlayout}
 \idxlayout{columns=2, columnsep=2em}
 \makeindex
