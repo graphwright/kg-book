@@ -210,7 +210,7 @@ The knowledge extraction bottleneck persisted as the tools slowly improved, but 
 
 ### The Robot Scientist
 
-In 2009, a paper appeared in *Science* with a deceptively modest title: "The Automation of Science." [@king2009automation]\index{The Automation of Science (King)} Its author, Ross King,\index{King, Ross} then at Aberystwyth University, described a system called Adam\index{Adam (robot scientist)} that had done something no machine had done before: it had conducted original scientific research autonomously, from hypothesis to experiment to conclusion, without a human in the loop.
+In 2009, a paper appeared in *Science* with a deceptively modest title: "The Automation of Science." [@king2009automation]\index{Automation of Science, The (King)} Its author, Ross King,\index{King, Ross} then at Aberystwyth University, described a system called Adam\index{Adam (robot scientist)} that had done something no machine had done before: it had conducted original scientific research autonomously, from hypothesis to experiment to conclusion, without a human in the loop.
 
 Adam's domain was the functional genomics of baker's yeast, *Saccharomyces cerevisiae*. Yeast is a well-studied organism, but in 2009 the functions of a significant fraction of its genes were still unknown. Adam was given access to a knowledge graph of yeast biology -- the known metabolic pathways, the existing gene-function assignments, the databases of protein interactions -- and tasked with identifying genes whose functions could be inferred and tested.
 
