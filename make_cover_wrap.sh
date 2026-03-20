@@ -33,22 +33,30 @@ FONT="DejaVu-Sans-Bold"
 
 # --- Back cover ---
 BACK_FONT_SIZE=72
-BACK_TEXT_W=$(( COVER_W - 200 ))   # 100px margin each side
-BACK_X=$(( COVER_W / 2 ))
-BACK_Y=$(( HEIGHT * 2 / 5 ))       # slightly above center
+BACK_MARGIN=150
+BACK_TEXT_W=$(( COVER_W - BACK_MARGIN * 2 ))
+BACK_Y=$(( HEIGHT * 2 / 5 ))   # slightly above center
+
+# Step 1: render the text block using pango (bypasses ImageMagick caption size limits)
+convert \
+    -size "${BACK_TEXT_W}x" \
+    -background "${DARK_BLUE}" \
+    pango:"<span font='DejaVu Sans Bold ${BACK_FONT_SIZE}' foreground='${WHITE}'>${BACK_TEXT}</span>" \
+    /tmp/back_text.png
+
+# Step 2: get the height of the rendered text block
+TEXT_H=$(identify -format "%h" /tmp/back_text.png)
+
+# Step 3: composite text onto back cover, vertically centered slightly above middle
+COMPOSITE_Y=$(( BACK_Y - TEXT_H / 2 ))
+if [ "${COMPOSITE_Y}" -lt "${BACK_MARGIN}" ]; then
+    COMPOSITE_Y=${BACK_MARGIN}
+fi
 
 convert \
-    -size "${COVER_W}x${HEIGHT}" \
-    xc:"${DARK_BLUE}" \
-    -font "${FONT}" \
-    -pointsize "${BACK_FONT_SIZE}" \
-    -fill "${WHITE}" \
-    -gravity None \
-    -size "${BACK_TEXT_W}x" \
-    caption:"${BACK_TEXT}" \
-    -geometry "+100+0" \
-    -gravity North \
-    -geometry "+0+${BACK_Y}" \
+    -size "${COVER_W}x${HEIGHT}" xc:"${DARK_BLUE}" \
+    /tmp/back_text.png \
+    -geometry "+${BACK_MARGIN}+${COMPOSITE_Y}" \
     -composite \
     /tmp/back_cover.png
 
@@ -56,22 +64,19 @@ convert \
 SPINE_FONT_SIZE=60
 SPINE_TEXT="Knowledge Graphs from Unstructured Text    Will Ware"
 
-# Build spine as a wide image, then rotate 90 degrees clockwise
-# so text reads top-to-bottom
-SPINE_TEXT_W=$(( HEIGHT - 100 ))   # leave 50px margin each end
-
+# Build spine rotated: render horizontally, then rotate 90 degrees
+# so text reads top to bottom on the spine
 convert \
-    -size "${HEIGHT}x${SPINE_W}" \
-    xc:"${DARK_BLUE}" \
+    -size "${HEIGHT}x${SPINE_W}" xc:"${DARK_BLUE}" \
+    -fill "${WHITE}" \
     -font "${FONT}" \
     -pointsize "${SPINE_FONT_SIZE}" \
-    -fill "${WHITE}" \
     -gravity Center \
     -annotate 0 "${SPINE_TEXT}" \
     -rotate 90 \
     /tmp/spine.png
 
-# --- Assemble wrap ---
+# --- Assemble wrap: back | spine | front ---
 convert \
     /tmp/back_cover.png \
     /tmp/spine.png \
