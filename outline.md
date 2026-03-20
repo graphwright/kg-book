@@ -8,11 +8,25 @@ description: "A practitioner's guide to building knowledge graphs from unstructu
 
 ## Preface
 
-This is a book written in the age of Large Language Models, but the central thesis of this book is about machine reasoning in general, now and in the future. Knowledge graphs predate LLMs and will outlast them, because they capture something essential to how humans understand and reason about complex fields in an explicit, structured form that can be shared and curated. A machine cannot reason reliably about such fields without knowledge encoded in some form of graph. The software projects described here are demonstrations of this thesis, not the subject of it. LLMs are enablers for the creation of knowledge graphs, which were much discussed in the past but only practical at scale now.
+My brother told an LLM:
+
+> I live near a carwash and the weather is warm and sunny. I want to get my car washed. Should I walk or drive there?
+
+and of course he was told that on a nice day like this, he could use the exercise, so he should walk to the carwash. The model didn't know he would need his car in order to get it washed. The wrong answer was delivered with the same tone and confidence as a right one. That's the problem this book is about.
+
+Large language models are fluent, capable, and unreliable in ways that are hard to predict in advance. They fail not randomly but systematically: at the boundary of what their training covered, at questions that require grounded reasoning about specific domains, at any task where being wrong matters. The fix is not to distrust them entirely. It is to give them something reliable to reason from — a structured, inspectable, domain-specific representation of what is actually known. That is a knowledge graph.
+
+This is a book written in the age of Large Language Models, but the central thesis is about machine reasoning in general, now and in the future. Knowledge graphs predate LLMs and will outlast them, because they capture something essential to how humans understand and reason about complex fields in an explicit, structured form that can be shared and curated. A machine cannot reason reliably about such fields without knowledge encoded in some form of graph. The software projects described here are demonstrations of this thesis, not the subject of it. LLMs are enablers for the creation of knowledge graphs, which were much discussed in the past but only practical at scale now.
+
+This book intentionally addresses two kinds of reader. Some readers will come for the argument — the history of knowledge representation, the case for explicit structure, the implications of what becomes possible when extraction is tractable. Others will come for the engineering — the schema design, the pipeline architecture, the identity resolution, the serving layer. The book tries not to exclude either. Readers who want the argument can follow Part I and Part IV without getting lost in Part III. Readers who want the engineering will find it in Parts II and III, grounded in the argument of Part I.
 
 ![](ExampleGraph.png)
 
-This is a picture of a simple knowledge graph. Bubbles and arrows (we can call them "nodes" and "edges" or "vertices" and "edges") both have labels representing metadata. Graph theory is a branch of mathematics that includes non-trivial theorems and results.
+A simple knowledge graph: nodes represent entities, edges represent typed relationships between them. The labels carry meaning; without them, the structure is just topology.
+
+This book builds its argument around a concrete project: a knowledge graph for medical literature, available at https://github.com/wware/kgraph. The project is the worked example throughout the book -- when the engineering chapters describe extraction pipelines, identity servers, and graph serving, that is the code they are describing.
+
+The project has four components: `kgraph`, the domain-agnostic core for building, bundling, and managing a knowledge graph; `kgserver`, which accepts a bundle and exposes it as an MCP server\index{model context protocol}, a graph visualization, a chatbot, and a set of API endpoints; `kgschema`, a domain-agnostic schema layer designed to be extended for specific domains; and `examples/medlit`, the medical literature implementation with its parsing, extraction, and identity resolution against biomedical ontologies.
 
 The gist of this book (beyond providing a lot of how-to information) is that a knowledge graph in some form is
 
@@ -33,13 +47,7 @@ We ask them questions about the capitals of countries, or about a chemical formu
 
 Correctness was never a primary design priority for LLMs. They are neural networks trained on large corpora. They try to predict the next bit of text, following statistical patterns derived from the training set. As long as our questions stay well within the training set, we can expect answers that are correct most of the time.
 
-When we stray outside the training set contents, the LLM has no mechanism or structure to gauge correctness and no way to correct an answer. We get answers that are articulate, confident, intelligent-sounding, and wrong. My brother told an LLM:
-
-> I live near a carwash and the weather is warm and sunny. I want to get my car washed. Should I walk or drive there?
-
-and of course he was told that on a nice day like this, he could use the exercise, so he should walk to the carwash.
-
-The LLM only "knows" what's in the training set, only the statistical patterns of the text it was trained on. It doesn't know that he'll need his car in order to get it washed. The dangerous part is that the wrong answer was delivered with the same tone and confidence as a right one would have been. There is no internal signal that says "I'm extrapolating here" or "I'm not sure." The machine has no way to distinguish a retrieval from memory from a plausible guess. This is **hallucination**\index{hallucination} -- the model producing confident, fluent, false output because it is doing what it was designed to do (generate statistically plausible text) in a situation where the right answer is not well represented in its training. Hallucination is not a bug to be patched; it is a predictable consequence of how LLMs work.
+When we stray outside the training set contents, the LLM has no mechanism or structure to gauge correctness and no way to correct an answer. We get answers that are articulate, confident, intelligent-sounding, and wrong. There is no internal signal that says "I'm extrapolating here" or "I'm not sure." The machine has no way to distinguish a retrieval from memory from a plausible guess. This is **hallucination**\index{hallucination} -- the model producing confident, fluent, false output because it is doing what it was designed to do (generate statistically plausible text) in a situation where the right answer is not well represented in its training. Hallucination is not a bug to be patched; it is a predictable consequence of how LLMs work.
 
 ### The Scale of the Problem
 
@@ -64,15 +72,6 @@ Knowledge graphs provide a unique return on investment. They are simple data str
 ## Chapter 2: A Brief History of Knowledge Representation
 
 `\chaptermark{Knowledge Representation History}`{=latex}
-
-There are three ideas running through this history.
-
-1. Reasoning benefits from (and may be impossible without) pre-processing of input data
-   to get it into a tractable structure that a computer (or frog brain) can understand.
-2. Meaning does not inhere in isolated labels or symbols, it emerges from the linking
-   of many labels or symbols to one another in specific ways to form a network.
-3. Building a linked network out of text that has no such pre-existing structure is a
-   hard problem, particularly at scale (thousands or millions of documents).
 
 ### The Idea That Wouldn't Die
 
@@ -202,7 +201,7 @@ Every era of knowledge representation described in this chapter ran into the sam
 
 The uncomfortable arithmetic is this: the vast majority of what humanity knows is written down in natural language -- in papers, books, reports, articles, case studies, clinical notes, legal opinions, engineering specifications, and a million other forms of text. This is where the knowledge lives. Not in databases. Not in ontologies. In sentences. And sentences, it turns out, are extraordinarily difficult to machine-read at the level required to extract structured, typed, confident knowledge from them.
 
-We'll later return to this sentence taken from the cancer literature. It illustrates some of the linguistic twists and turns that humans handle effortlessly.
+We'll later return to this sentence of the kind that appears routinely in the cancer literature. It illustrates some of the linguistic twists and turns that humans handle effortlessly.
 
 > Patients treated with the combination showed significantly reduced tumor burden compared to controls, though the effect was attenuated in those with prior platinum exposure.
 
@@ -224,7 +223,7 @@ The question that Adam poses -- and that this book is, in part, an attempt to an
 
 ### The Cross-Disciplinary Machine
 
-Adam's knowledge graph was narrow by design. It covered yeast biology with enough depth to support genuine inference, and it covered almost nothing else. That narrowness was what made the system tractable in 2009 -- and it was also the ceiling on what Adam could discover. The hypotheses Adam could form were hypotheses *within* yeast biology. It could notice that a metabolic pathway had a gap and infer what might fill it. It could not notice that a compound studied in a completely different context -- say, a natural product investigated for antimicrobial properties in a separate literature -- had structural properties that might make it relevant to the yeast pathway it was reasoning about. That connection would require a graph that spanned both domains and knew that the relevant entities in each were related.
+Adam's knowledge graph was narrow by design. It covered yeast biology with enough depth to support genuine inference, and it covered almost nothing else. That narrowness was what made the system tractable in 2009 -- and it was also the ceiling on what Adam could discover. The hypotheses Adam could form were hypotheses *within* yeast biology. It could notice that a metabolic pathway had a gap and infer what might fill it. It could not notice that a compound studied in a completely different context -- say, a natural product investigated for antimicrobial properties in a separate literature -- had structural properties that might make it relevant to the yeast pathway it was reasoning about. That connection would require a graph that spanned both domains and knew that the relevant entities in each were related. Adam's limitation was not capability but scope.
 
 The reason cross-disciplinary reasoning is hard isn't that the connections don't exist. They do, and the history of science is full of examples: Fleming\index{Fleming, Alexander} noticing that a mold was killing his bacterial cultures, Krebs\index{Krebs, Hans} recognizing the cyclic nature of metabolic reactions by drawing on observations scattered across the biochemistry literature, the structural biologists whose work on crystallography turned out to be essential to understanding DNA. These weren't lucky accidents. They were pattern matches made by unusually well-read people who happened to have enough breadth to see a connection that specialists couldn't.
 
@@ -255,10 +254,6 @@ These four properties together distinguish a knowledge graph from a labeled grap
 **Every entity has a canonical identity.**\index{canonical entity}\index{canonical ID} A stable identifier that persists across documents, authors, and time. The same gene is the same node whether a paper calls it by its official symbol, a common alias, or a misspelling. Resolving that multiplicity to a single identity is not bookkeeping; it's what makes the graph useful.
 
 **Every relationship carries provenance.**\index{provenance} A traceable record of where the claim came from, by what method it was established, and with what confidence. A relationship without provenance is an assertion of unknown quality. A relationship with provenance is evidence.
-
-### Nodes, Edges, and What They Mean
-
-Entities, relationships, and the critical point that a relationship isn't just a link. What distinguishes a KG from a property graph\index{property graph}, a relational database, or a document store.
 
 ### The Semantics Matter
 
@@ -295,7 +290,7 @@ A graph without provenance is a collection of claims with no way to evaluate the
 
 ### Identity: The Hard Problem
 
-Canonical identity as a first-class concern, not an implementation detail. Identity is hard and consequential, being introduced at the level of abstraction appropriate for a chapter that's defining what a knowledge graph is. It's non-trivial, and treating it as an afterthought is a mistake. A graph where "BRCA1," "breast cancer gene 1," and "BRCA1 protein" are three separate nodes isn't a knowledge graph -- it's an index.
+A graph where "BRCA1," "breast cancer gene 1," and "BRCA1 protein" are three separate nodes isn't a knowledge graph -- it's an index.
 
 But the stakes go deeper than deduplication. Canonical identity doesn't just help you say that two things are the same. It places those things within the body of human knowledge. The identifiers that matter -- MeSH or UMLS\index{UMLS} CUI for medical concepts (UMLS is perhaps the more complete resource, but requires a licensed API key; for development purposes MeSH is free and sufficient), Gene Ontology terms for molecular function, DBPedia URIs for cross-domain entities -- come from accepted authoritative ontologies. They are maintained by communities of experts, revised through consensus, and trusted precisely because they represent the accumulated judgment of the field. When you assign a canonical ID to an entity, you are not merely collapsing synonyms. You are connecting that entity to the history of human thought as far as that entity is concerned: its definition, its place in the taxonomy, its relationships to other concepts that the community has already established and agreed upon. A knowledge graph built on canonical IDs is not just a graph of facts -- it is a graph that inherits the epistemic authority of the ontologies it anchors to. That inheritance is what makes the graph trustworthy across sources, across time, and across the boundary between human expertise and machine reasoning.
 
@@ -365,15 +360,13 @@ An explicit representation -- a knowledge graph -- is a different kind of thing.
 
 The history of knowledge representation in AI is, in one reading, a long argument about this distinction. The expert systems of the 1980s had it right in principle: they reasoned over explicit representations, their inferences were in principle auditable, and when they were wrong you could usually figure out why. What they got wrong was the economics: building and maintaining those representations required armies of knowledge engineers working with domain experts, and it didn't scale. The logic-based systems were brittle because the representations were brittle -- incomplete, inconsistent, and expensive to update. The statistical revolution of the 1990s and 2000s threw out the explicit representation in favor of learned, implicit ones, and gained enormous practical capability at the cost of auditability. The current moment is the first time in the history of the field that it has been practically possible to build explicit, structured, domain-specific representations at scale without armies of knowledge engineers -- because the extraction step, the part that was always the bottleneck, can now be done by a language model with a well-designed prompt.
 
-The argument comes full circle. Representation matters. Explicit representation matters more than implicit representation in any domain where the reasoning has to be auditable. Extraction is what makes explicit representation tractable at scale. Language models provide the extraction. The rest of this book is the engineering.
-
 ## Chapter 5: The Extraction Problem
 
 `\chaptermark{The Extraction Problem}`{=latex}
 
 ### Humans are smarter than you think
 
-Consider this sentence, from a real paper in the cancer literature:
+Consider this sentence, something you might find in the cancer literature:
 
 > Patients treated with the combination showed significantly reduced tumor burden compared to controls, though the effect was attenuated in those with prior platinum exposure.
 
@@ -407,15 +400,7 @@ The honest summary: classical NLP built extractors that worked well on the easy 
 
 ### Economics of LLMs for extraction
 
-The shift that large language models bring is not, primarily, a capability shift. It's an economic one, and the economic shift is what makes the capability shift matter.
-
-The marginal cost of a new extraction task, with classical NLP, was a research project: weeks or months of work, annotated training data, iterative refinement against a domain-specific benchmark, deployment engineering, and ongoing maintenance as the schema evolved. For organizations with the resources to do this, it was feasible. For everyone else, it wasn't. Knowledge graph construction from unstructured text was, in practice, a capability available only to well-resourced actors in high-value domains.
-
-The marginal cost of a new extraction task with a large language model is a prompt. Not a simple prompt -- a good extraction prompt takes thought, domain knowledge, and iterative refinement, and we'll spend a chapter on how to write one. But the cycle from "I want to extract this kind of relationship" to "I have a working extractor" is measured in hours, not months. Schema changes don't require retraining. A domain expert who can't write code can participate meaningfully in defining what the extraction should look for. The feedback loop between schema design and extraction quality -- always important, usually expensive to close -- becomes something you can iterate through in an afternoon.
-
-This is a phase transition\index{phase transition (cost)}, not an incremental improvement. When the cost of a capability drops by two orders of magnitude, the set of people who can use it changes qualitatively, not just quantitatively. Knowledge graph construction from unstructured text is no longer a capability for organizations with research teams and annotation budgets. It's a capability for anyone with a corpus, a clear schema, and the patience to iterate on prompts.
-
-What LLMs bring to the specific challenges of extraction is also worth being concrete about. Hedging and negation -- the bane of classical systems -- are handled naturally by a model that has learned from an enormous amount of human language, most of which contains hedging and negation. Implicit relationships -- the ones a knowledgeable reader infers rather than reads directly -- are within reach of a model with enough domain knowledge in its training distribution. Cross-sentence dependencies, which defeated most classical architectures, are handled by the attention mechanisms that are foundational to the transformer architecture\index{transformer architecture}. Domain jargon is less of a problem when the model has been trained on a corpus large enough to have seen most of it.
+The marginal cost of a new extraction task with a large language model is a prompt — the cycle from "I want to extract this kind of relationship" to "I have a working extractor" is measured in hours, not months, and schema changes don't require retraining. Chapter 6 develops the full economic argument. What matters here is what LLMs bring to the specific challenges of extraction: Hedging and negation -- the bane of classical systems -- are handled naturally by a model that has learned from an enormous amount of human language, most of which contains hedging and negation. Implicit relationships -- the ones a knowledgeable reader infers rather than reads directly -- are within reach of a model with enough domain knowledge in its training distribution. Cross-sentence dependencies, which defeated most classical architectures, are handled by the attention mechanisms that are foundational to the transformer architecture\index{transformer architecture}. Domain jargon is less of a problem when the model has been trained on a corpus large enough to have seen most of it.
 
 None of this is magic, and it's worth being precise about what it isn't.
 
@@ -435,18 +420,6 @@ This chapter ends honestly because the rest of the book is the engineering respo
 
 `\chaptermark{LLMs Make This Practical Now}`{=latex}
 
-The first five chapters of this book made two kinds of arguments. One was conceptual.
-
-* Knowledge graphs are necessary for reliable machine reasoning, not just convenient.
-* Explicit representation is epistemologically superior to implicit representation in any domain where the reasoning has to be auditable.
-* The structure of expert knowledge is relational, and a graph is the natural data structure for capturing it.
-
-The other argument was historical.
-
-* People have been trying to build these things for decades.
-* The conceptual case was understood early.
-* The work kept stalling at the same bottleneck.
-
 Getting knowledge *in* -- turning unstructured text into structured, typed, provenance-tracked graph data at scale -- was the hard part, and it stayed hard for a long time. This chapter is about why it stopped being hard.
 
 The answer is large language models, but the reason they matter for this problem is not primarily about capability. It's about economics. The capability is real and we'll get to it. But capability arguments for AI systems tend to slide into hype, and the hype obscures what actually changed. What actually changed is that the cost structure of knowledge graph construction from unstructured text underwent a phase transition -- from "research project" to "afternoon of prompt engineering" -- and that change in cost is what changed who can build these things and what they can be built for.
@@ -465,7 +438,7 @@ What changes with large language models is the marginal cost of a new extraction
 
 Not zero -- there's no free lunch, and we'll catalog the costs honestly in a moment. But the order of magnitude shifts dramatically. A classical NLP system adapted to a new domain required months of work from a team with specialized skills. An LLM-based extraction pipeline for a new domain requires a prompt that describes what you're looking for. A good prompt takes thought, iteration, and domain knowledge; we'll spend Chapter 10 on how to write one. The cycle from "I want to extract this kind of relationship" to "I have a working extractor" is measured in hours or days, not months. Schema changes don't require retraining. A domain expert who can't write code can look at a prompt, understand what it's asking for, and suggest improvements. The feedback loop between schema design and extraction quality -- always important, almost always expensive to close in classical systems -- becomes something you can iterate through in an afternoon.
 
-This is a phase transition, not an incremental improvement. When the cost of a capability drops by two orders of magnitude, the population of people and organizations who can use it changes qualitatively. Knowledge graph construction from unstructured text is no longer a capability reserved for organizations with research teams and annotation budgets. It's available to anyone with a corpus, a clear schema, and the patience to iterate.
+This is a significant upheaval, not an incremental improvement. When the cost of a capability drops by two orders of magnitude, the population of people and organizations who can use it changes qualitatively. Knowledge graph construction from unstructured text is no longer a capability reserved for organizations with research teams and annotation budgets. It's available to anyone with a corpus, a clear schema, and the patience to iterate.
 
 That matters for who builds knowledge graphs, what domains get covered, and ultimately what gets done with them. The broader implications are in Part IV. For now, the point is narrower: the barrier that kept this technology concentrated in a few hands has lowered. The rest of this chapter is about why the lowering is real and durable, and where the remaining barriers are.
 
@@ -539,7 +512,7 @@ The answer is the convergence of three things that had to arrive together.
 
 The first is model capability. The capability of general-purpose language models for complex semantic understanding crossed a threshold somewhere around the GPT-4\index{GPT-4} generation. Before that threshold, prompted extraction was possible but brittle on complex constructions; after it, the failures became manageable with good engineering. Earlier models were impressive but required more hand-holding. Current models handle the hard cases -- hedging, negation, implicit relationships, cross-sentence dependencies -- with the consistency needed for production pipelines.
 
-The second is API accessibility. Using a capable language model for extraction before the current generation of public APIs meant running your own infrastructure, which meant GPU clusters, model serving, and the full operational stack. This was possible for large organizations; it wasn't feasible for a researcher, a small company, or an individual practitioner. The existence of stable, affordable, well-documented APIs for capable models changes who can build this. You don't need infrastructure. You need an API key and a credit card.
+The second is API accessibility. Using a capable language model for extraction before the current generation of public APIs meant running your own infrastructure, which meant GPU clusters, model serving, and the full operational stack. This was possible for large organizations; it wasn't feasible for a researcher, a small company, or an individual practitioner. The existence of stable, affordable, well-documented APIs for capable models changes who can build this. You don't need infrastructure. You need an API key and a credit card to get started.
 
 The third is the tooling ecosystem. The infrastructure for building knowledge graph pipelines -- graph databases with native support for the relevant query patterns, vector databases for embedding-based retrieval, orchestration frameworks for multi-step LLM pipelines -- arrived, matured, and became accessible at roughly the same time as the models. A knowledge graph pipeline in 2020 would have required assembling a stack of immature tools and writing substantial infrastructure code. Today the stack exists and the components are well-documented.
 
@@ -557,11 +530,21 @@ Not every knowledge graph requires extraction. Some are built from sources that 
 
 ### When You Don't Need Extraction
 
-The central claim of this book is that extraction from unstructured text is the bottleneck that has limited knowledge graphs for decades, and that LLMs have finally made it tractable. But that claim only applies when the knowledge lives in unstructured form. In many situations, the knowledge is already structured when it reaches you.
+The central claim of this book is that extraction from unstructured text is the bottleneck that has limited knowledge graphs for decades, and that LLMs have finally made it tractable. But that claim only applies when the knowledge lives in unstructured form. In many situations, the knowledge is already structured when it reaches you, and extraction to a knowledge graph is simply a mechanical reformatting, perhaps a short shell or Python script. Structured web sources (schema.org markup, government open data) and well-documented APIs fall into the same category.
 
 Perhaps the data comes from lab equipment that outputs well-defined records -- a sequencer, a spectrometer, a sensor network. Perhaps it comes from a database table with columns and foreign keys. Perhaps it comes from an ontology or formal specification that was designed to be machine-readable from the start. In these cases, the mapping from source to graph is often straightforward: a short script, an ETL pipeline, or a direct translation of the source schema into graph form. No LLM is required. No extraction prompt. No ambiguity about what the text meant. The structure is given.
 
 This chapter examines several such cases. The goal is not to dismiss them -- they are important and widely used -- but to clarify the boundary. When does a knowledge graph require extraction, and when does it not? The answer determines whether the techniques in the rest of this book apply to a reader's problem, and it also illuminates what extraction is *for*: bridging the gap between the knowledge that is already structured and the knowledge that is not.
+
+The practical question is: which case are you in? A few signals help.
+
+If your domain has established, maintained, machine-readable authorities -- ontologies, registries, curated databases -- and your knowledge questions can be answered from those sources alone, you may not need extraction at all. The authority is the graph, or close enough that a mapping script is all that stands between them.
+
+If your domain's knowledge lives primarily in structured form but you need to connect across sources -- linking a genomics database to a drug database to a clinical outcomes registry -- you need identity resolution and schema alignment, but not LLM-based extraction. The challenge is integration, not interpretation.
+
+If the knowledge you need is in the literature -- in the prose of papers, reports, case notes, specifications -- then extraction is not optional. The structured sources don't have it. The only way to get it into the graph is to read the text and interpret it, and that is what the rest of this book is about.
+
+Misidentifying your case is expensive in both directions. Building an extraction pipeline for a domain where structured authorities already cover your needs wastes time and introduces noise you didn't have to create. Assuming a structured source covers your domain when the real knowledge lives in the prose means building a graph with systematic blind spots you may not notice until a user asks the wrong question.
 
 ### Lab Instruments and Measured Data
 
@@ -569,11 +552,11 @@ Genomics provides the canonical example. DNA sequencers, mass spectrometers, and
 
 Graphs like STRING\index{STRING database} (protein-protein interactions), BioGRID\index{BioGRID} (genetic and physical interactions), and IntAct\index{IntAct} (molecular interactions) are populated primarily from such experimental measurements. They aggregate data from thousands of published studies, but the aggregation is over structured datasets that the authors deposited in repositories -- not over the free text of the papers. The extraction problem, in this context, is largely solved by the experimental design: the scientist produces structured output, and the graph ingests it.
 
-What these graphs are good for is clear. They support queries like "what proteins interact with BRCA1?" or "what pathways involve this gene?" with high precision, because the edges correspond to actual experimental observations. What they miss is equally important: the experiment that wasn't done, or wasn't published as structured data, or was described only in the discussion section of a paper, is not in the graph. The knowledge that lives in the prose -- the mechanistic interpretation, the caveats, the connections to other domains that the authors didn't formalize -- remains inaccessible. For many biomedical questions, that's the majority of what's known. Lab instruments and measured data give you a high-quality graph over a subset of the domain. Extraction is what gives you access to the rest.
+What these graphs are good for is clear. They support queries like "what proteins interact with BRCA1?" or "what pathways involve this gene?" with high precision, because the edges correspond to actual experimental observations. What they miss is equally important: the experiment that wasn't done, or wasn't published as structured data, or was described only in the discussion section of a paper, is not in the graph. The knowledge that lives in the prose -- the mechanistic interpretation, the caveats, the connections to other domains that the authors didn't formalize -- remains inaccessible. For many biomedical questions, that's the majority of what's known. Lab instruments and measured data give you a high-quality graph over a subset of the domain.
 
 ### Generated and Synthetic Graphs
 
-A related class of knowledge graphs is constructed from databases, ontologies, or formal specifications rather than from text or instruments. The Gene Ontology\index{Gene Ontology} is a curated hierarchy of molecular function, biological process, and cellular component terms -- it is a graph by design, with typed relationships (is_a, part_of, regulates) between terms. Drug interaction databases like DrugBank\index{DrugBank} or STITCH\index{STITCH} map drugs to targets, indications, and interactions using structured records. Legal code can be represented as a graph of sections, references, and amendments. In each case, the source was already formal enough that conversion to graph form is a matter of schema mapping, not interpretation.
+A related class of knowledge graphs is constructed from databases, ontologies, or formal specifications rather than from text or instruments. The Gene Ontology\index{Gene Ontology} is a curated hierarchy of molecular function, biological process, and cellular component terms -- it is a graph by design, with typed relationships (`is_a`, `part_of`, `regulates`) between terms. Drug interaction databases like DrugBank\index{DrugBank} or STITCH\index{STITCH} map drugs to targets, indications, and interactions using structured records. Legal code can be represented as a graph of sections, references, and amendments. In each case, the source was already formal enough that conversion to graph form is a matter of schema mapping, not interpretation.
 
 The precision of these graphs is high. When a relationship is asserted in the Gene Ontology, it has been reviewed by curators and validated against evidence. When a drug-target interaction appears in DrugBank, it has been extracted and verified by the database maintainers. The boundary between a knowledge graph and a very well-structured relational database starts to blur here -- and that blurriness is instructive. A graph is often just a different view of the same data, with traversal and path-finding as the primary operations instead of joins and aggregations.
 
@@ -583,7 +566,7 @@ The limitation is coverage. These graphs contain what was explicitly encoded. Th
 
 Wikidata,\index{Wikidata} Freebase\index{Freebase} before it, and DBpedia represent a different model: human curation at scale. Millions of entities, millions of relationships, maintained by a community of contributors who add facts, correct errors, and resolve disputes through discussion and consensus. The result is a graph that spans many domains, with reasonable quality where the community has focused effort, and gaps where it has not.
 
-What this achieves is remarkable. A single query can retrieve structured information about a person, a place, a chemical, a historical event -- with identifiers that are stable, with relationships that are typed, with provenance that points to sources. For many applications, that is enough. The cost is the cost of human labor: curation does not scale to the full breadth of human knowledge, and it scales least well to domains where the knowledge is technical, specialized, or rapidly evolving. Encyclopedia articles can be curated. The full text of the medical literature cannot.
+A single query can retrieve structured information about a person, a place, a chemical, a historical event -- with identifiers that are stable, with relationships that are typed, with provenance that points to sources. For many applications, that is enough. The cost is the cost of human labor: curation does not scale to the full breadth of human knowledge, and it scales least well to domains where the knowledge is technical, specialized, or rapidly evolving. Encyclopedia articles can be curated. The full text of the medical literature cannot.
 
 DBpedia\index{DBpedia} illustrates the boundary clearly. It is extracted from Wikipedia infoboxes and structured elements -- but the extraction is from semi-structured templates, not from free prose. The infobox for a drug might have a "mechanism" field; the body of the article might have three paragraphs of nuanced explanation that never made it into the template. DBpedia has the former. It does not have the latter. Curated graphs at scale work where the community can structure the knowledge. They do not work where the knowledge lives in papers, reports, and documents that no one has the bandwidth to formalize.
 
@@ -595,6 +578,8 @@ The free KG cases set a quality benchmark worth aiming for. When a graph is buil
 
 The free cases also illustrate the shape of the gap. It is not that extraction is impossible or that extracted graphs are inherently low quality. It is that extraction is a different kind of problem -- one that requires interpreting natural language, resolving ambiguity, and making judgments about what the text implies. The tools for that problem have improved dramatically. The problem itself has not gone away.
 
+The gap is worth being specific about. A structured-source graph rarely has a wrong relationship direction -- the schema defines which way an edge runs and the data conforms. An extracted graph will have some inverted edges, particularly for asymmetric relationships stated in passive voice. A structured-source graph has stable entity identity -- the authority assigns the ID and it doesn't drift. An extracted graph has provisional entities that may be duplicated, merged incorrectly, or resolved differently across pipeline runs. A structured-source graph has relationships with known epistemic type -- a DrugBank interaction is always a curated assertion, not a model inference. An extracted graph mixes extraction confidence levels, and the metadata that tracks them requires deliberate schema design to preserve. None of these gaps are fatal. They are all addressable by the architecture in Part III. But they are real, and knowing they exist is what motivates the engineering choices ahead.
+
 ### Hybrid Approaches
 
 Most real knowledge graphs combine extraction with structured sources. The typical pattern: extract entities and relationships from text, then link the extracted entities to authoritative identifiers from a curated database or ontology.\index{hybrid knowledge graph} A drug mention in a paper is resolved to an RxNorm code. A disease mention is resolved to a MeSH term. A gene mention is resolved to an HGNC identifier. The extraction provides the coverage -- the connections that appear in the literature. The authority lookup provides the identity -- the canonical form that makes those connections comparable across sources.
@@ -602,6 +587,16 @@ Most real knowledge graphs combine extraction with structured sources. The typic
 This hybrid approach does not make the extraction problem go away. It constrains it. Instead of inventing identifiers from scratch, the extractor (or a downstream resolution pass) maps to an existing vocabulary. That mapping is itself a form of extraction -- the model must recognize that "ketoconazole" in the text refers to the same thing as RxNorm's concept for ketoconazole -- but it is a narrower problem than inventing a full schema and populating it from scratch. The schema, or at least the entity vocabulary, is given by the authority. The extraction fills in the relationships and the provenance.
 
 The medical literature example in Part III follows this pattern. Entities are extracted from papers and resolved to MeSH, HGNC, RxNorm, or provisional IDs when no authority match exists. The Gene Ontology and other ontologies provide a backbone for relationship types. The result is a graph that combines the coverage of extraction with the identity resolution of curated sources. It is not a free KG -- extraction is central -- but it is not a purely extracted KG either. The hybrid is the norm, and understanding both the extraction side and the structured side is necessary to build one well.
+
+### The Goal
+
+The free KG cases are not a detour. They are the target.
+
+The chapters that follow describe how to build a knowledge graph from unstructured text -- how to design a schema, run an extraction pipeline, resolve entity identity, track provenance, and serve the result. That engineering is substantial. But the reason to do it carefully is precisely that you want to arrive somewhere close to where the free cases already are: high-precision edges, stable entity identities, queryable provenance, confident relationship types. The structured sources set the standard. Extraction is the attempt to meet that standard in the domains where structured sources don't reach.
+
+That gap -- between what the structured sources cover and what the literature knows -- is where the most interesting knowledge lives. The well-curated ontologies cover the established, the agreed-upon, the formalized. The literature covers the recent, the contested, the preliminary, the cross-disciplinary connection that nobody has formalized yet. A graph built from extraction can in principle reach all of it. Whether it reaches it at the quality level required for reliable reasoning depends on the decisions in Parts II and III.
+
+This is the bridge the chapter is standing on. Behind it: decades of attempts to build knowledge representations, the bottleneck that stopped them, and the LLM-based tools that finally make extraction tractable. Ahead: the engineering of a system that tries to capture the knowledge in the text at a quality level worth reasoning over. The free cases show what that looks like when you get there.
 
 ## Chapter 8: Designing Your Schema
 
@@ -661,7 +656,7 @@ Versioning\index{schema versioning} helps. When the schema changes, the extracti
 
 Migration is the hard part. Adding a new entity type is usually straightforward. Splitting an existing type, or changing the semantics of a relationship, can require backfilling or re-extraction. The argument for keeping the schema as simple as possible for as long as possible is practical: every entity type and relationship type is a commitment. Add only what is clearly needed. Defer the rest until the need is demonstrated.
 
-A single source of truth for domain specifics pays off here. When entity types, predicates, and prompt instructions live in one module, a change in one place updates the extraction prompt, validation logic, and deduplication rules together. Splitting them across YAML configs, Python code, and prompt templates invites drift: an entity type added in one file is forgotten in the prompt, or a predicate constraint tightened in the schema is not reflected in the dedup stage. One module, one edit, no drift. Readers building their own systems will find that maintaining a single domain specification module -- whether in code, config, or a schema language -- reduces the class of errors that come from inconsistent copies of the same information.
+A single source of truth for domain specifics pays off here. When entity types, predicates, and prompt instructions live in one module, a change in one place updates the extraction prompt, validation logic, and deduplication rules together. Splitting them across YAML configs, Python code, and prompt templates invites drift: an entity type added in one file is forgotten in the prompt, or a predicate constraint tightened in the schema is not reflected in the dedup stage, or an entity type added to the schema but forgotten in the extraction prompt produces silent gaps. One module, one edit, no drift. Readers building their own systems will find that maintaining a single domain specification module -- whether in code, config, or a schema language -- reduces the class of errors that come from inconsistent copies of the same information.
 
 # Part III: Building It
 
@@ -689,7 +684,7 @@ Note on authority coverage: UMLS\index{UMLS} is the gold-standard disease author
 
 **Relationship labels on edges.** The edges should show their types: "treats," "inhibits," "causes," "associated with," "subtype of." That visibility is diagnostic. You can spot relationships that are too generic ("associated with" everywhere suggests your extraction prompt isn't distinguishing relationship types) or relationships that are wrong for the domain (a "treats" edge from a symptom to a disease is probably a mistake). The graph visualization becomes a quality audit: you're not just seeing that things connect, you're seeing *how* they connect, and that's where extraction errors show up.
 
-**More info on mouse-over and click.** The specifics of what "more info" to display will depend on your application. For medical literature, I want to see what papers mentioned something, a level of confidence, any identifying information.
+**More info on mouse-over and click.** The specifics of what "more info" to display will depend on your application. For medical literature: source papers, confidence level, and canonical ID.
 
 ![](MetadataView.png)
 
@@ -751,10 +746,7 @@ If you do need provenance at query time, design for it from the start. The query
 
 `\chaptermark{The Identity Server}`{=latex}
 
-The identity server\index{identity server} is the authoritative component for entity identity across the knowledge graph. It handles the full lifecycle of an entity's identity: resolving a mention to an ID, promoting a provisional entity to canonical status, detecting synonyms, and merging duplicates into a single survivor. All of this must be correct under concurrent access from multiple worker processes and multiple server
-replicas.
-
-There are a number of authoritative ontologies in the world of medical literature: MeSH\index{MeSH} for diseases, HGNC\index{HGNC} for genes, RxNorm\index{RxNorm} for drugs, and others. These are universally known, meticulously maintained, and trusted in that world. The stakes in medicine are high, and the care given to these ontologies reflects that.
+The identity server\index{identity server} is the authoritative component for entity identity across the knowledge graph. It handles the full lifecycle of an entity's identity: resolving a mention to an ID, promoting a provisional entity to canonical status, detecting synonyms, and merging duplicates into a single survivor. All of this must be correct under concurrent access from multiple worker processes and multiple server replicas. We'll revisit concurrency concerns later.
 
 ### Identity Is Load-Bearing\index{entity resolution}\index{canonical entity}
 
@@ -784,7 +776,7 @@ Treating canonical IDs as primary keys also forces the right question at the rig
 
 ### Authority Lookup
 
-In medicine there are established ontological authorities: MeSH for diseases and symptoms, HGNC for genes, RxNorm for drugs, UniProt\index{UniProt} for proteins. These are curated, maintained, and widely used. When your extraction produces "ketoconazole," you can look it up in RxNorm and get back a canonical drug ID. When it produces "Cushing's disease,"\index{Cushing's disease} you can look it up in MeSH and get back a term ID. The authority does the work of disambiguation -- "Cushing's disease" (pituitary adenoma) versus "Cushing's syndrome"\index{Cushing's syndrome} (the broader clinical picture) -- and gives you a stable identifier for each.
+There are a number of authoritative ontologies in the world of medical literature: MeSH\index{MeSH} for diseases, HGNC\index{HGNC} for genes, RxNorm\index{RxNorm} for drugs, UniProt\index{UniProt} for proteins, and others. These are universally known, meticulously maintained, and trusted in that world. The stakes in medicine are high, and the care given to these ontologies reflects that. These are curated, maintained, and widely used. When your extraction produces "ketoconazole," you can look it up in RxNorm and get back a canonical drug ID. When it produces "Cushing's disease,"\index{Cushing's disease} you can look it up in MeSH and get back a term ID. The authority does the work of disambiguation -- "Cushing's disease" (pituitary adenoma) versus "Cushing's syndrome"\index{Cushing's syndrome} (the broader clinical picture) -- and gives you a stable identifier for each.
 
 Your domain may have equivalents. Legal documents have citation systems; a case or statute can be identified by a standard citation format. Chemistry has InChI and SMILES; a compound can be identified by its structure. Geography has gazetteers and coordinate systems. Library science has ISBNs and OCLC numbers. If your domain has established identifiers, use them. They exist precisely because the domain has an identity problem and the community has invested in solving it.
 
@@ -837,7 +829,566 @@ The identity server handles provenance-derived entities with a short-circuit pat
 3. **Synonym recognition.** Detect when two entities refer to the same real-world concept, using domain-defined criteria such as vector similarity, shared external identifiers, or string normalization.
 4. **Merging.** Collapse duplicate entities into a single survivor, redirecting all references from absorbed entities to the survivor. Absorbed entities are retained — not deleted — so that stale external references remain resolvable via a single redirect lookup.
 
-### Abstract Interface
+### Abstract Interface and Reference Implementation
+
+The identity server is defined as an abstract base class with four operations: `resolve`, `promote`, `find_synonyms`, and `merge`. An `on_entity_added` event hook ties synonym detection into the entity insert transaction. The interface is domain-pluggable: authority lookup strategy, synonym criteria, survivor selection, and promotion thresholds are all left to the domain implementation.
+
+The medlit reference implementation uses Postgres as the backing store, with `INSERT ... ON CONFLICT DO NOTHING` for `resolve`, `SELECT FOR UPDATE` for `promote`, and Postgres advisory locks for `merge`. Synonym detection uses pgvector for embedding-based nearest-neighbour search within the same transaction boundary. The full Python ABC, domain-pluggable interface, status rules, idempotency contract, locking strategy, and multi-replica deployment notes are in Appendix B.
+
+## Chapter 12: The Ingestion Pipeline
+
+`\chaptermark{The Ingestion Pipeline}`{=latex}
+
+### Why Multiple Passes at All
+
+The temptation is to do extraction end-to-end in one shot: send the document to the model, get back entities and relationships, done. That approach fails at scale for reasons that are worth stating explicitly. A single monolithic pass has a single point of failure -- if anything goes wrong, you restart from scratch. It produces output that is hard to debug, because you can't inspect intermediate states. And it conflates concerns that are better handled separately: entity extraction, identity resolution, relationship extraction, and assembly are different problems with different failure modes and different recovery strategies.
+
+Staging the pipeline into multiple passes addresses all of this. Each pass has a well-defined input and output. Failures are recoverable: if the extraction pass fails on document 47, you fix the issue and rerun that pass from document 47, not from document 1. Intermediate artifacts are inspectable -- you can look at the raw entity extractions before resolution, or the resolved entities before relationship extraction, and see exactly where the pipeline went wrong. The per-document bundle becomes the natural unit of work between passes: each document produces a bundle that can be validated, cached, and merged independently. None of this is medlit-specific. It's good pipeline design for any extraction problem at non-trivial scale.
+
+The medlit batch pipeline uses four stages, each with its own script and a well-defined artifact at its output:
+
+1. **Vocabulary** (`fetch_vocab`): LLM pass over all papers to build a shared vocabulary of canonical entity names and their aliases. Output: `vocab.json` and a seeded synonym cache.
+2. **Extract** (`extract`): LLM entity and relationship extraction for each paper, using the vocabulary as context. Output: per-paper `paper_*.json` artifact files in the `extracted/` directory.
+3. **Ingest** (`ingest`): Identity-server-based deduplication and canonical ID assignment across all extracted bundles. Output: `entities.json`, `relationships.json`, and an ID map in `merged/`.
+4. **Build bundle** (`build_bundle`): Assembles the kgbundle -- the loadable artifact consumed by kgserver. Fetches titles for cited papers from NCBI `esummary`. Output: `entities.jsonl`, `relationships.jsonl`, and supporting files in `bundle/`.
+
+That ordering matters. You need a consistent entity vocabulary before extraction can use it. You need resolved entity IDs before you can aggregate relationships across documents. And you need the aggregated merged output before you can build the final bundle. Other orderings are possible, but the principle holds: separate concerns, make each pass debuggable, design for partial failure and restart.
+
+### Parsing: Getting to Text
+
+Whatever your source format, you need to get to structured text before you can extract anything. The model reads text; it doesn't read PDF layout or XML tags. JATS XML\index{JATS XML} -- the format used by PubMed Central -- is medlit's case: a structured representation of journal articles with metadata, abstract, and body sections. Yours might be PDFs, HTML, EPUB, proprietary formats, or plain text that's already clean. The parser's job is to produce a document representation that preserves structure the extractor can use: section boundaries, paragraph boundaries, and the actual text content.
+
+Two decisions matter regardless of format. First, how do you identify section boundaries? In scientific papers, the distinction between Methods, Results, and Discussion carries semantic weight -- a claim in Results is different from a claim in Discussion. In legal documents, sections and subsections matter for citation. The parser should expose this structure so downstream passes can use it. Second, how do you chunk for extraction? Documents are often too long to send to the model in one call. Chunk too small and you lose context -- the referent of "it" or "the compound" may be in the previous chunk. Chunk too large and you exceed model context limits, dilute the signal, or hit token budgets that make the run expensive. Overlapping chunks\index{overlapping chunks} can help: each sentence appears in at least one chunk, so no sentence is orphaned at a boundary. Sentence boundaries are a practical constraint worth respecting -- splitting mid-sentence produces fragments that are harder for the model to interpret correctly.
+
+### Extraction: The LLM Pass
+
+This is where your schema meets the text. The extraction prompt is not a generic "extract entities and relationships" request. It is a binding of your entity types and relationship types to natural language, written so the model understands exactly what to look for. A good prompt names each entity type with a clear definition, lists each relationship type with its subject and object constraints, and instructs the model to capture provenance alongside content -- which passage, what hedging language, what confidence. The prompt is the place where domain expertise gets translated into extraction behavior. A clinician reviewing the prompt should be able to assess whether it matches their understanding of the domain.
+
+The tradeoff between prompt specificity and prompt flexibility is real. A highly specific prompt -- "extract only direct assertions, ignore speculative language, require explicit subject-verb-object structure" -- tends to produce higher precision and lower recall. The model extracts less, but what it extracts is more reliable. A more flexible prompt -- "extract any relationship that might be implied, include hedged claims" -- tends to produce higher recall and lower precision. You get more relationships, but more of them will need filtering or correction. There's no universal right answer. The right balance depends on your domain, your tolerance for noise, and what you're doing with the graph. Iteration over the prompt is the design method. You run extraction on a sample, inspect the output, adjust the prompt, repeat. There's no shortcut.
+
+### Vocabulary: Building a Shared Terminology\index{vocabulary pass}
+
+Before extraction, medlit runs a dedicated vocabulary pass over all the papers in the batch. The idea: before you try to resolve "BRCA1," "breast cancer gene 1," and "BRCA1 protein" to the same entity, you establish a shared vocabulary of entity names and their variants. A vocabulary pass asks the LLM a narrower, cheaper question than full extraction -- "given the text of this paper, list the distinct named entities you see and their common aliases" -- and aggregates the answers across all papers into a canonical name list.
+
+The output of the vocabulary pass feeds directly into extraction. When the extraction prompt runs for each paper, the shared vocabulary is injected as context: "these are the preferred names for entities seen across the corpus; use them." This keeps extraction consistent across workers and across time. Without it, two papers that both mention GPX4 might extract it as "GPX4," "glutathione peroxidase 4," and "phospholipid hydroperoxide glutathione peroxidase" in three different bundles, and identity resolution must sort them out later. With the vocabulary priming the extraction prompt, the model tends to use a consistent preferred form, reducing the deduplication burden downstream.
+
+Not every domain needs a vocabulary pass. If your corpus uses consistent terminology, extraction may produce sufficiently normalized output without it. But medicine, law, and chemistry -- any field where the same concept has many names and many names map to the same concept -- will see a measurable reduction in deduplication noise. Think of it as schema binding at the lexical level: you're telling the model what things are called before asking it to extract relationships among them.
+
+### Deduplication
+
+The same entity extracted from many documents will appear under slightly different names. "Aspirin," "acetylsalicylic acid," "ASA," and "2-acetoxybenzoic acid" are one drug. "Type 2 diabetes," "T2DM," "diabetes mellitus type 2," and "adult-onset diabetes" are one disease. The deduplication stage groups mentions, resolves them to canonical forms, and handles the ambiguous cases. This is where the gap between "a list of extracted facts" and "a coherent graph" starts to close.
+
+The details vary by domain. In medicine, authority lookup -- MeSH, RxNorm, HGNC, and the rest -- does much of the work: many apparent synonyms resolve to the same canonical ID automatically. What remains after authority lookup is the residue: novel entities, institution-specific abbreviations, terms that aren't in any vocabulary yet. For those, you need other signals. Embedding similarity can help: mentions that are semantically close in embedding space may be the same entity. So can co-occurrence: if "compound X" and "imatinib" appear in the same document and the context suggests they're the same, that's evidence. The hard cases are the ambiguous ones -- "ACE" could be angiotensin-converting enzyme or the gene, "CRF" could be corticotropin-releasing factor or chronic renal failure. Resolving those may require context, domain heuristics, or human review. The universal part: you need a deduplication strategy, and it should run before or alongside relationship extraction so that relationships reference resolved entities, not raw strings.
+
+### Assembly
+
+Once you have per-document extractions -- entities resolved, relationships extracted -- you need to merge them into a coherent whole. Assembly is not just concatenation. When multiple documents assert the same relationship, that's meaningful signal. "Drug A treats Disease B" from one paper is weaker than "Drug A treats Disease B" from five independent papers. The assembly stage should aggregate evidence across sources: one relationship record with a provenance list, not five duplicate edges. That aggregation is what makes the graph useful for reasoning -- you can weight relationships by how many sources support them, filter by evidence type, and detect when sources conflict.
+
+The structure of the final bundle is worth thinking about carefully before you start. What does a "document" in your graph look like? Is it a node with metadata and outgoing edges to the relationships it supports? Are relationships first-class with document references, or are documents first-class with relationship references? The choice affects query patterns, provenance traversal, and how you handle updates when you re-ingest a document with corrections. Changing the bundle structure later, once you have data and downstream consumers, is expensive. Get it right early.
+
+### Progress Tracking and Resumability\index{resumability}
+
+Large ingestion runs fail partway through. A run over 100,000 documents will hit rate limits, network timeouts, model outages, or your own mistakes. If the pipeline has no notion of progress, you restart from zero every time. That's acceptable for a research prototype. It's not acceptable for something you run regularly.
+
+Design for restartability\index{restartability} from the beginning. Each document should have a processing status: not started, in progress, completed, failed. The pipeline should record which documents have been fully processed and which haven't. On restart, it should skip completed documents and resume from the first incomplete one. Checkpointing\index{checkpointing} within a document -- if a single document requires multiple LLM calls, record which chunks have been processed -- can help for very long documents, though the document is usually the right granularity. The progress store should be persistent and survive process restarts. This isn't glamorous work. It's the difference between a pipeline you can run once as a demo and a pipeline you can run every week as part of your workflow.
+
+### Design Principles
+
+The concepts above translate directly into four implementation commitments.
+
+**Dedup-on-write.** The `IdentityServer` resolves entity identity and detects synonyms incrementally as each entity is written. There is no global deduplication pass over the corpus; papers can be ingested concurrently and the identity server handles merging correctly under concurrent access.
+
+**Per-paper atomicity.** Each paper moves through stages independently. A failure at any stage leaves the paper at its last committed status; the next available worker picks it up and retries. No paper's failure affects any other.
+
+**Durable checkpoints.** Raw fetched text and raw LLM extraction output are stored durably before any graph writes. This means a schema change, extraction bug, or infrastructure failure can be recovered from without re-fetching or re-paying LLM costs.
+
+**Shared pipeline code.** The MCP tool and the batch runner call the same stage functions. There is no separate implementation for interactive versus batch use.
+
+### Stages
+
+#### 1. Fetch
+
+Retrieves raw text or XML for a PMC ID from the PMC API and stores it in `ingest_jobs.raw_text`. This stage is pure I/O and completely independent of all other work. A previously fetched paper never needs to be re-fetched.
+
+#### 2. Extract
+
+Runs the LLM extraction call for a paper. Before calling the LLM, the worker queries the live graph for the most frequent entities of each relevant type and injects them as context. This keeps extraction consistent across workers and across time — the context improves as the corpus grows.
+
+The raw LLM output is stored in `ingest_jobs.raw_extraction` and also written to a paper artifact file (see below) before any graph writes occur.
+
+#### 3. Ingest
+
+Writes entities and relationships from `raw_extraction` to the graph. For each entity:
+
+1. `identity_server.resolve(mention, context)` — returns a canonical or provisional entity ID, creating one if needed, idempotently.
+2. `identity_server.on_entity_added(entity_id, context)` — triggers synonym detection and merge.
+
+Both calls happen **inside the same transaction as the entity insert**, so synonym detection fires only after the row is durably committed and visible. This prevents the race where two concurrent workers see each other as merge candidates before either insert completes.
+
+Relationship writes are in the same transaction as the entity inserts for the paper. There is no gap between them.
+
+### Work Queue, Artifact Files, and Reference Implementation
+
+The medlit implementation uses Postgres as a work queue (via `SKIP LOCKED` for distributed job claiming), per-paper artifact files for durability and retraction support, and a shared set of pipeline functions used by both the batch CLI and the MCP tool. The full SQL schema, shell invocations, Python snippets, and extraction output JSON format are in Appendix B.
+
+# Part IV: What It Makes Possible
+
+## Chapter 13: What Your Graph Can Do
+
+`\chaptermark{What Your Graph Can Do}`{=latex}
+
+The value of the graph is in what grounded reasoning becomes possible, not in the serving layer. The graph doesn't tell the reasoning system what to conclude -- it offers evidence and lets the reasoning happen.
+
+### The Server Is Not the Point
+
+This chapter is about what becomes possible once your graph exists, not about how to build a particular server. The medlit project has a serving layer -- kgserver -- with REST, GraphQL, MCP, and persistent storage backends. You might build something like it, or you might expose your graph through a completely different interface, or you might not serve it externally at all. The infrastructure choices are yours. What this chapter is really about is the capability space: what can a well-constructed knowledge graph actually do for someone?
+
+That distinction matters because it's easy to conflate "I have a graph" with "I have a graph server." The graph is the data structure and the relationships it encodes. The server is one way to expose it. You could serve the same graph through a REST API, a GraphQL endpoint, an MCP server, a SPARQL endpoint, a custom query language, or no server at all -- just load it into memory and run Python scripts against it. The capabilities we're about to describe -- direct querying, visualization, grounding LLMs, hypothesis generation -- are capabilities of the graph. The server is a delivery mechanism. Choose one that fits your users and your deployment constraints; don't let the choice of server obscure what the graph itself enables.
+
+### Direct Querying
+
+The basics: entity lookup, relationship queries, graph neighborhood traversal. These are useful and often sufficient for many applications. The interesting design question isn't which API style (REST, GraphQL, something else) but what the right query primitives are for your domain. What questions will your users actually ask?
+
+A biomedical researcher might ask: "What drugs are known to treat this condition?" "What genes are associated with this disease?" "What's the evidence for this drug-gene interaction?" A legal researcher might ask: "What cases cite this statute?" "What statutes does this case interpret?" The primitives that support these questions -- get entity by ID, get relationships of type X from entity Y, get N-hop neighborhood, filter by provenance -- are similar across domains. The *semantics* of what counts as a good answer differ. A drug-disease "treats" relationship in medicine has different evidentiary standards than a case-statute "cites" relationship in law. Your query interface should expose primitives that map cleanly to your domain's question types, not force users to translate their questions into a generic graph query language.
+
+At minimum, you need: entity lookup (by name or canonical ID), relationship enumeration (what connects to this entity, and how), and some form of traversal (neighbors, N-hop expansion, path finding). Provenance-aware queries -- "give me this relationship and its sources" -- belong in the primitive set if your domain cares about evidence, which most serious domains do. Everything else is optimization.
+
+### Graph Visualization
+
+Chapter 9 recommended graph visualization as a diagnostic tool for pipeline development. What might visualization do for an end user exploring the graph?
+
+A browsable, zoomable view of entities and relationships would let users navigate structure that would be tedious to reconstruct from query output. "Show me everything connected to this drug" produces a list; a force-directed layout\index{force-directed layout} produces a picture where clusters, bridges, and outliers are visible at a glance. For exploration and discovery -- "what's in this neighborhood?" "what connects these two things?" -- visualization often beats tabular output. The implementation cost is modest if you already have the query primitives; for users who think spatially about their domain, it may be the most natural interface you offer.
+
+### Grounding LLM Inference
+
+The pattern that changes what a language model can do: instead of asking a model to reason from its training data, give it structured, typed, provenance-tracked claims from your graph and ask it to reason from those. The difference in reliability is substantial. A model hallucinating over raw text and a model reasoning over a curated graph with explicit provenance are doing qualitatively different things, even if they look similar from the outside. This is the integration that makes a knowledge graph more than a database.
+
+The mechanics are straightforward. A user asks a question. Your system retrieves relevant subgraphs -- entities and relationships that match the question's scope -- and injects them into the model's context. The model reasons over that context and produces an answer. The answer is grounded in the retrieved graph, not in the model's training. You can cite the sources. You can trace the reasoning path. When the graph is wrong, you fix the graph; you don't retrain the model.
+
+The retrieval step matters. "Relevant" means different things for different questions. A question about a specific drug might need that drug's neighborhood, its indications, its interactions, and the evidence for each. A question about a disease might need the disease's subtypes, associated genes, known treatments, and the studies that support those links. Designing the retrieval logic -- what subgraph to fetch for what question -- is where domain knowledge enters. A generic "fetch entities mentioned in the question" often works; a retrieval strategy tuned to your schema and your users' question patterns works better. The graph gives you something to retrieve. The retrieval strategy determines how well the model uses it.
+
+### MCP as the Integration Point\index{Model Context Protocol (MCP)}
+
+The Model Context Protocol is worth understanding as an architectural pattern, not just as a specific technology. The idea is that a knowledge graph should be a first-class context source for LLM-based systems -- something that agents, assistants, and reasoning pipelines can query as naturally as a human researcher would reach for a reference database. Whether you use MCP specifically or some other integration approach, the principle is sound: your graph is most powerful when it's actively grounding inference, not sitting passively waiting to be queried by humans.
+
+MCP defines a standard way for AI systems to discover and call tools. A knowledge graph exposed as an MCP server offers tools like "find entities matching this query," "get the neighborhood of this entity," "retrieve relationships of type X." An LLM-powered assistant with access to that server can answer domain questions by querying the graph, synthesizing the results, and citing the sources. The user gets an answer grounded in your curated knowledge rather than in the model's training distribution. The integration is loose: the model doesn't need to know your schema in advance; it discovers the available tools and uses them. That looseness is a feature. Because the contract is machine-readable, the reasoning layer can adapt to schema changes without code changes on the consumer side. Your graph can evolve without breaking every consumer.
+
+MCP represents a qualitative shift in how the graph participates in inference. The specific thing MCP provides that REST and GraphQL don't is *discoverability*: tools are self-describing, typed, and enumerable at runtime. An agent can query the server to learn what tools exist and what they do, without being pre-programmed for your specific schema. That makes the graph a first-class active participant in agentic reasoning rather than a passive endpoint that some human wired up in advance.
+
+If you decide not to use MCP, the graph still needs to be queryable by whatever system is doing the reasoning. REST, GraphQL, or a custom API all work, albeit not discoverable in the same way. The architectural point is that the graph should be *available* to the reasoning layer, not a separate system that humans query manually. Passive retrieval -- human runs query, copies result, pastes into chat -- is a fallback. Active grounding -- the reasoning system queries the graph as part of generating its answer -- is the target.
+
+### BFS Queries\index{breadth-first search (BFS)}
+
+The medlit implementation uses a JSON-based breadth-first search query language designed for LLM friendliness and context-window efficiency. The key design insight is that topology and presentation are orthogonal: BFS from seed nodes determines *which* nodes and edges are in the subgraph, while node and edge filters control only how much metadata each item carries in the response. Non-matching items appear as stubs rather than being omitted, so the LLM always sees an accurate picture of the graph's shape.
+
+The full query format, response format, field reference, worked examples, and LLM prompt template are in Appendix A.
+
+### Hypothesis Generation
+
+The capability that arguably justifies building the graph in the first place, and the one that most clearly connects back to Chapter 2's Robot Scientist. Graph traversal as a discovery tool: not "what do we know about X" but "what's adjacent to X that hasn't been studied," "what entities are structurally similar to X in the graph," "what relationships exist between X and Y that no single paper asserts but that follow from combining multiple sources." These are queries that are impossible over raw text and natural over a well-constructed graph.
+
+Consider a concrete example. Drug A treats disease D. Gene G is associated with disease D. Drug B modulates gene G. No single paper may state that drug B is worth testing for disease D. The inference follows from combining three relationships that exist in the graph. A researcher who had read all the relevant papers might make that connection; the graph makes it queryable. "What drugs modulate genes associated with this disease?" is a traversal. The results are candidate hypotheses: drug-disease pairs that the graph implies but that may not have been studied together. Some will be known, some will be nonsense, some will be novel and worth investigating. The graph doesn't decide which are which. It surfaces candidates that a human or a downstream system can filter and prioritize.
+
+Structural similarity is another pattern. Two entities are structurally similar if their neighborhoods in the graph look alike -- similar relationship types, similar connected entity types, similar topology. If drug X is structurally similar to drug Y, and drug Y treats condition Z, then drug X might be worth testing for Z. The graph encodes the structure; the similarity query exploits it. Again, the result is a candidate set, not a conclusion. The value is in narrowing the space of possibilities to something a researcher can evaluate.
+
+### Should Hypothesis Generation Be Baked In?
+
+A question worth sitting with rather than answering too quickly. There's an argument that hypothesis generation is generic enough -- graph traversal, structural similarity, gap detection -- that it belongs in the framework rather than in domain-specific code. There's a counterargument that what counts as an interesting hypothesis is deeply domain-specific, and that baking it in prematurely produces a mechanism that nobody actually wants. The honest answer is probably that the *primitives* (traversal, similarity, subgraph queries) belong in the framework, and the *interpretation* of what makes a result interesting belongs in domain code or in the prompts given to whatever LLM is reasoning over the results.
+
+The framework should provide: neighborhood queries, path finding, structural similarity metrics, and the ability to express "entities connected by relationship type R" and "entities that share property P." The framework should not provide: "generate interesting hypotheses for drug discovery" or "suggest research directions." Those require domain-specific filters (what counts as a plausible drug target?), domain-specific prioritization (what's already been studied?), and domain-specific presentation (how do you explain the suggestion to a researcher?). The line between generic and domain-specific is fuzzy, but the principle holds: build reusable primitives; let domain code compose them into domain-specific capabilities.
+
+### Returning to the Dream
+
+This section returns to the themes of Part I. Chapter 2 presented the long-standing vision of machines that reason over explicit knowledge -- the dream that motivated semantic networks, expert systems, Cyc, and the Semantic Web. Chapter 4 argued that representation is the prerequisite for principled reasoning: that grounded inference requires an explicit, inspectable structure, not just statistical fluency. The chapters that followed have laid out the engineering: extraction pipelines, schema design, authority lookup, and the integration of a knowledge graph with a language model for synthesis and explanation. A functioning system built along those lines is not the Robot Scientist that Adam and Eve embodied -- it does not design and execute experiments in a lab. The gap between what the preceding chapters have shown how to construct and what those systems demonstrated is narrower than it looks. The architecture is the same: represent the domain explicitly, generate candidates from structure, ground the reasoning in that representation. The substrate has changed from formal logic and lab robotics to graphs and language models. The need for that explicit layer has not.
+
+## Chapter 14: The Augmented Researcher
+
+`\chaptermark{The Augmented Researcher}`{=latex}
+
+### What Machines Would See That We Can't
+
+Consider confirmation bias\index{confirmation bias}. A researcher with a hypothesis tends to notice evidence that supports it and to underweight evidence that doesn't. This isn't a character flaw; it's how attention works. When you're reading papers one at a time, your prior beliefs shape what you notice, what you remember, and what you connect. A graph doesn't have prior beliefs. It encodes what the literature asserts, and a traversal query doesn't care whether the result confirms or contradicts your favorite theory. The graph surfaces connections that a human reader, biased toward coherence with existing beliefs, might have skimmed past. That doesn't make the graph right and the human wrong. It makes them different. The graph offers a view that isn't filtered through a single researcher's expectations.
+
+Prestige bias\index{prestige bias} works similarly. A finding from a famous lab or a high-impact journal gets more attention than the same finding from an unknown group or a niche venue. Citation networks\index{citation network} amplify this: papers that are already well-cited get cited more, in a feedback loop that the Matthew effect\index{Matthew effect} describes. A knowledge graph built from a broad corpus can include relationships from papers that nobody cites. The graph doesn't know which papers are prestigious. It knows which relationships were extracted. A query over the graph can surface a connection that appeared in an obscure regional journal twenty years ago and was never picked up by the mainstream literature. Again, that doesn't make the obscure paper right. It makes it *visible* in a way that citation-based discovery systematically hides it.
+
+Recency bias\index{recency bias} is the flip side. Newer work gets more attention than older work, partly because it's easier to find and partly because the field has collectively decided that recent results matter more. But important findings sometimes sit in the literature for decades before someone connects them to a new context. A graph that spans the full temporal range of a corpus can surface those connections. "What did we know about X in 1990?" is a query that citation networks handle poorly -- they tend to show you what's cited now, which skews recent -- but a graph can answer it directly.
+
+The point is not that machines are unbiased. Extraction has its own biases: it favors what the model was trained on, what the schema captures, what the prompts elicit. The point is that the biases are *different*. A human reading the literature and a graph traversing the same literature will surface different patterns. The augmented researcher has access to both views.
+
+### The Combinatorial Argument\index{combinatorial discovery}
+
+A graph with N entities and relationship types R has on the order of N² × R possible pairwise connections. Most of those don't exist; the graph is sparse. But the space of *potential* connections -- pairs of entities that could be related, that might be worth investigating -- is enormous. A human researcher can survey a tiny fraction of it. A graph can enumerate it.
+
+The combinatorial argument is that important discoveries often live at the intersection of things that were known separately but never connected. Drug A was studied for condition X. Pathway B was studied in context Y. Nobody looked at A and B together because the relevant papers were in different subfields, published in different decades, or written in different languages. The connection was always possible in principle; it just required someone to look. A graph that spans both subfields can surface "A modulates B" as a candidate relationship -- either one that exists in the literature but wasn't connected, or one that the graph implies from combining multiple sources. The researcher's job becomes evaluating candidates rather than generating them from scratch. The graph does the combinatorial explosion; the human does the judgment.
+
+Structural analogies\index{structural similarity} across disciplines extend this. A relationship pattern that holds in one domain might hold in another. "Compound X inhibits enzyme Y" in biochemistry suggests "inhibitor of Y" as a search strategy in drug discovery. "Gene G is associated with disease D" in genetics suggests "genes in the same pathway as G" as candidates for D. The graph encodes structure; structural similarity queries exploit it. A researcher who knows one domain well can use the graph to find analogous patterns in domains they know less well. The graph doesn't replace domain expertise. It extends the reach of that expertise across a larger structure than any one person could hold in their head.
+
+### Linguistic and Geographic Blind Spots\index{linguistic bias}\index{geographic bias}
+
+The scientific literature is not evenly distributed. A disproportionate share of what gets read, cited, and built upon is published in English, from institutions in North America and Europe, in journals that Western researchers routinely check. That's not a conspiracy; it's the cumulative effect of where funding flows, where training happens, and how citation networks form. The result is that a researcher following the standard literature is systematically missing work from other languages, other regions, and other publication venues.
+
+Citation networks encode and amplify this. If you discover papers by following citations, you stay within the citation graph. Papers that nobody in your network cites are invisible to you. They might as well not exist. A knowledge graph built from a genuinely broad corpus -- including non-English sources, regional journals, preprints, and gray literature -- can surface relationships that the citation network never connects. The graph doesn't care that a paper was published in Portuguese or in a journal with an impact factor of 0.5. It cares that the extraction found a relationship. A query over that graph can return results that would never appear in a citation-based search.
+
+This isn't a panacea. Extraction quality varies by language and by how well the source matches the model's training distribution. Building a graph that truly spans the global literature requires deliberate effort: multilingual extraction\index{multilingual extraction}, diverse source selection, and care that the pipeline doesn't silently drop or degrade non-standard inputs. But the capability is there. A well-constructed KG with broad sourcing can surface what citation networks systematically miss. For domains where important work happens outside the mainstream -- rare diseases,\index{rare disease} regional health issues, indigenous knowledge, applied research in developing countries -- that capability matters.
+
+### The Robot Scientist, Revisited
+
+Chapter 2 introduced Adam and Eve: systems that conducted original scientific research autonomously, from hypothesis to experiment to conclusion. Adam's knowledge graph was narrow -- yeast biology, hand-curated, sufficient for inference within that domain. Eve extended the pattern to drug discovery. What they demonstrated was that the scientific method could be formalized and automated, given a rich enough knowledge representation.
+
+Now the reader has seen how to build that representation from the literature itself. Extraction, identity resolution, provenance tracking, hypothesis generation from graph traversal -- the machinery in Part III is the machinery that would let an Adam-like system scale beyond a single hand-curated domain. The question is how close we are.
+
+The honest answer: close enough to see the path, not close enough to declare victory. We have extraction that works at scale. We have identity resolution that produces interoperable graphs. We have provenance that supports evidence-weighted reasoning. We have hypothesis generation as graph traversal. What we don't have, yet, is the full loop: automated experiment design, robotic execution, and belief updating from results. Adam had that. Eve had that. The knowledge graph part -- the representation that the loop reasons over -- is now buildable from literature. The wet-lab part remains a different kind of engineering problem. But the representation was always the bottleneck. Once the graph exists, the rest is engineering.
+
+The ability to affordably construct large knowledge graphs that cross domains could enable the automation-of-science idea in a way that Adam's narrow domain could not. A graph that spans drug discovery, disease biology, and chemical space could generate hypotheses that connect compounds, targets, and indications across literatures that no single human could synthesize. That could help science advance farther and more rapidly. What might that do for society? The honest answer is that we don't know -- but the pattern of transformative scientific moments is suggestive. Germ theory didn't just improve medicine; it ended entire categories of death. The development of antibiotics, of vaccines, of insulin -- each one removed a cause of suffering that had been permanent for all of prior human history. A system that could systematically surface what the literature already implies but hasn't yet connected might enable the next such moment to arrive sooner, or in a domain where the literature is too scattered for any individual researcher to see the full picture. That's not a prediction. It's a reason to take the engineering seriously.
+
+## Chapter 15: Who Benefits, Who Decides
+
+`\chaptermark{Who Benefits, Who Decides}`{=latex}
+
+### Democratization and Its Limits
+
+Building and maintaining a serious knowledge graph still requires significant resources. You need a corpus, which may be behind paywalls\index{paywalls}. You need compute for extraction, which costs money. You need domain expertise to design the schema and validate the output. The result is that the first generation of domain-spanning knowledge graphs will likely be built by those who can afford to build them -- pharmaceutical companies, large universities, government agencies, well-funded startups. The question of who gets access then becomes a question of licensing, openness, and governance.
+
+The promise the technology holds out is real nonetheless. A researcher at a small institution, or in a developing country, with access to a comprehensive KG over their domain would have the same structural view of the literature as a researcher at a well-funded lab. The graph doesn't care who queries it. The capability to synthesize across millions of papers, to surface connections that citation networks hide, to ground an LLM in curated knowledge -- that capability could be democratized. The technology enables it; policy and incentive will decide whether it happens.
+
+### Compressed Discovery Timelines\index{drug discovery}
+
+In drug discovery, the bottleneck is often synthesis -- not of molecules, but of knowledge. A promising target emerges from basic research. The relevant literature spans decades, multiple disciplines, and hundreds of papers. Someone has to read it, extract the key relationships, and figure out what's known, what's contested, and what's missing. That synthesis can take months. A functioning extraction pipeline and a well-constructed graph can compress it to days. The same is true in rare disease research, where the literature is scattered across case reports, small studies, and patient advocacy publications. And in materials science, where the space of possible compounds is vast and the literature connecting structure to properties is fragmented. In each of these domains, the bottleneck is not the underlying science; it's the human capacity to hold and connect what's already been published. A KG that does that synthesis automatically changes the pace of work. The researcher's time shifts from "what do we know?" to "what should we do next?" That shift is consequential.
+
+### The Rare Disease Problem\index{rare disease}
+
+Rare diseases are underserved not because nobody cares but because no single community is large enough to see the full picture. A disease that affects one in fifty thousand people might have a few hundred papers published about it, scattered across decades and subdisciplines. No single clinician sees enough cases to develop deep expertise. No single researcher has the bandwidth to synthesize the full literature. The patient community is small and often fragmented. The result is that knowledge about rare diseases exists -- it's in the literature -- but it's never assembled in a form that any one person or group can use. Patients and their doctors are left to piece it together from whatever they can find.
+
+A knowledge graph built from the full rare-disease literature could serve as a coordination mechanism. It wouldn't replace clinical expertise or patient advocacy. It would give both something to work with: a structured view of what's known, what's been tried, what's connected to what. A clinician facing an unfamiliar rare diagnosis could query the graph for similar cases, related genes, and treatment attempts. A patient group could use it to identify research gaps and prioritize what to fund. The graph doesn't solve the problem of small communities. It gives small communities access to the same structural synthesis that large communities can achieve through sheer numbers. That's a different kind of equalizer.
+
+### Credit, Priority, and Provenance\index{credit (scientific)}\index{scientific priority}
+
+When a machine surfaces a connection -- a drug-disease relationship that no single paper states but that the graph implies from combining multiple sources -- who gets credit? The authors of the papers that contributed the underlying facts? The builders of the graph? The user who ran the query? The question matters for scientific priority, intellectual property, and the sociology of research. Scientists are rewarded for discovery. If the discovery is made by a system, the reward structure gets complicated.
+
+Provenance tracking, which the book has treated as a technical concern throughout, turns out to have significant ethical implications. How you record where a fact came from determines who can be credited. A relationship with full provenance -- source document, passage, extraction method -- makes it possible to trace the contribution back to the original authors. A relationship stored without provenance makes that impossible. The technical decision about schema design is also a decision about how credit will flow. The same is true for conflicts: when two sources assert contradictory relationships, provenance lets you represent the conflict rather than silently merging. That representation matters for how disputes get resolved and how the community understands what's known versus what's contested. The builder of the graph is making choices that affect the sociology of the domain, whether or not they intend to.
+
+### Who Owns the Graph\index{open science}\index{graph ownership}
+
+Open versus proprietary is not a new tension in science. GenBank\index{GenBank}, the repository of genetic sequences, was built as a public resource; the decision to make it open and freely accessible shaped how molecular biology developed. Clinical trial data, by contrast, has often been held proprietary by sponsors; the fight for access has been long and only partially won. The question of who owns a comprehensive knowledge graph over a significant scientific domain will have similar consequences.
+
+If a single entity -- a company, a government, a consortium -- controls the graph, that entity controls who can query it, what they can do with the results, and how the graph evolves. The incentives may align with the scientific commons, or they may not. A company that built a drug-discovery KG might restrict access to protect competitive advantage. A government might restrict access for national security reasons. An open consortium might make the graph freely available but lack the resources to maintain it. The historical analogies are instructive: GenBank succeeded because the community agreed that sequence data should be a commons; clinical trial data remains contested because the incentives are mixed. A knowledge graph over a domain like medicine or materials science will face the same tensions. What it would mean for a single entity to control it -- the power to shape what gets synthesized, what gets surfaced, what gets updated -- is worth thinking about before it happens.
+
+## Chapter 16: The Inference You Didn't Intend
+
+`\chaptermark{The Inference You Didn't Intend}`{=latex}
+
+### The Architecture of Expertise\index{architecture of expertise}
+
+If the knowledge graph captures something essential to human expert understanding -- the deep structure of how a domain is organized, the relationships that experts use to reason, the typology of entities and how they connect -- then a system that reasons over it has access to the **architecture of expertise**, not just facts. That's the promise of the approach: the graph isn't a dump of assertions; it's a representation of how the domain hangs together. A system that traverses it, that generates hypotheses from its structure, that grounds an LLM in its claims, is reasoning with the same structural substrate that human experts use. The power of that is real. So is the responsibility. A system with access to the architecture of expertise can do things its builders didn't anticipate. This chapter is about what that means.
+
+### Capability Is Not Bounded by Intent\index{capability vs. intent}
+
+Consider what it means to build a system that encodes the architecture of expertise for a domain. You built a graph for drug discovery; a user runs a traversal that surfaces a drug-pathway combination that could be repurposed for something harmful. You built a graph for medical literature; a query connects the dots in a way that reveals something about a person's health that they didn't intend to share. You built a graph for materials science; the same structural similarity query that finds promising battery compounds could find promising explosives. None of these are edge cases or failures. They follow directly from the system working as designed.
+
+The graph encodes structure; structure supports inference; inference doesn't respect the boundaries of what you had in mind. A reasoning system with access to rich, typed, provenance-tracked knowledge will surface connections its builders didn't anticipate -- because the value of the system is precisely that it can traverse the graph more exhaustively than any individual human would. That traversal doesn't stop at the edges of your intended use case. Capability is not neatly bounded by intent.
+
+That doesn't mean you shouldn't build. It means you should build with your eyes open. The inferences the system can surface are a feature when they advance science and a risk when they don't. The difference is often context, use case, and the choices you make about access, provenance, and what gets logged. Those choices deserve to be taken seriously.
+
+### Dual Use at Graph Scale\index{dual use}
+
+The drug interaction that saves lives and the synthesis route that enables harm are both pattern-matching problems over structured knowledge. A graph that encodes "compound X inhibits enzyme Y" and "reaction A produces compound X" can answer "what inhibits Y?" for a clinician looking for treatments and for someone looking for precursors. The same query interface serves both. The graph doesn't know the difference. Dual use is not a bug; it's inherent to how knowledge works. Facts don't come with moral valence. The same fact can support healing or harm depending on who uses it and how.
+
+What does responsible construction and deployment look like? There's no clean answer, but there are practices that help. Access control\index{access control}: who can query the graph, and for what? Some graphs should be broadly available; others may need to be restricted to credentialed researchers or vetted use cases. Provenance and transparency: when the system surfaces a connection, can the user trace it to sources? That traceability supports verification and accountability. Logging and monitoring: if the graph is used for something harmful, can you detect it? Auditing: who reviews how the system is used? These are operational questions, not just technical ones. They don't eliminate dual use. They make it harder to misuse the system without leaving a trace, and they create channels for accountability when misuse occurs. The right response to dual use isn't to not build. It's to build with these questions in mind.
+
+### Bias at Scale\index{bias (knowledge graph)}
+
+A knowledge graph encodes the biases of its sources. If the biomedical literature over-represents male subjects, Western populations, and certain research paradigms, the graph encodes that. A query over the graph will surface relationships that reflect those biases. The graph doesn't add bias; it preserves and amplifies what's in the literature. At scale, that amplification has a subtle effect: the graph starts to look like systematic knowledge. The user sees a dense network of connections and may assume it represents the full picture. It doesn't. It represents what got published, in what proportions, with what emphases. The appearance of comprehensiveness can be misleading.
+
+Mitigation strategies exist. Diverse sourcing: build the graph from a corpus that includes underrepresented populations, regions, and publication venues. Provenance transparency: make it visible where each relationship came from, so users can assess coverage and gaps. Explicit uncertainty representation: don't present the graph as ground truth; represent confidence, conflict, and the limits of the corpus. These strategies help. They have limits. You can't source what doesn't exist; if the literature on a topic is thin or skewed, the graph will be too. Provenance helps users notice gaps; it doesn't fill them. Uncertainty representation requires schema support and user literacy. The honest conclusion: bias at scale is a structural feature of any system built from human-generated sources. You can mitigate it; you can't eliminate it. Build with that in mind.
+
+### The Epistemic Responsibility of the Builder\index{epistemic responsibility}
+
+What do you owe to the users of the system you build? At minimum, you owe them honesty about what the system is and isn't. It's a synthesis of the literature, not a representation of ground truth. It has gaps, biases, and limits. Users who don't understand that may over-trust it. You also owe them the infrastructure for verification: provenance, so they can trace claims to sources; confidence, so they can weight what they find; and documentation, so they know what the schema captures and what it doesn't.
+
+Beyond that, the builder's choices about provenance, transparency, access, and schema design are ethical choices, not just technical ones. Deciding what to extract, how to represent it, who gets to query it, and what gets logged -- these decisions shape how the system will be used and what consequences it will have. That doesn't mean every builder must solve every ethical problem before shipping. It means the builder is a stakeholder, with some power to shape outcomes. The right response isn't paralysis. It's to take the responsibility seriously, to build with the foreseeable consequences in mind, and to create the conditions for accountability when things go wrong.
+
+## Chapter 17: What's Next
+
+`\chaptermark{What's Next}`{=latex}
+
+### Open Problems
+
+The approach in this book works. It also has limits. An honest assessment of what doesn't yet solve well:
+
+**Very long document contexts.** Scientific papers can be tens of thousands of words. The relationships that matter may span sections written pages apart. Chunking helps but doesn't fully solve the problem: a relationship that spans a chunk boundary may be missed, and the model's context within any chunk is always less than the full document. Longer context windows in future models will help. So will multi-pass strategies that explicitly handle cross-chunk dependencies. The problem is tractable; it's not solved.
+
+**Multi-hop reasoning during extraction.**\index{multi-hop reasoning} Some relationships require integrating information across multiple sentences, paragraphs, or documents. "Drug A was tested in combination with B; the combination showed activity against C" implies a relationship between the combination and C that depends on understanding both clauses. Current extraction is largely single-pass over local context. Richer reasoning during extraction -- the ability to hold intermediate conclusions and combine them -- would improve recall on complex relationships. This is an active research direction.
+
+**Real-time updating.** The pipeline in this book is batch-oriented: you ingest a corpus, build a graph, serve it. When new papers appear, you re-run the pipeline. That works for many use cases. It doesn't work for domains where freshness matters -- breaking news, emerging outbreaks, rapidly evolving fields. Incremental update\index{incremental update}, where new documents are processed and merged without full re-ingestion, is a different design. It's buildable; it adds complexity.
+
+**Schema evolution without re-extraction.**\index{schema evolution!without re-extraction} When you add a new entity type or relationship type, the natural approach is to update the schema and re-extract. That's expensive at scale. Schema evolution that can incorporate new types without re-processing the entire corpus -- perhaps by running a targeted extraction pass over documents likely to contain the new type -- is an open problem. Most projects today bite the bullet and re-extract when the schema changes significantly.
+
+None of these are fundamental blockers. They're places where the current approach is good but not great, and where progress would expand the range of problems the technology can address.
+
+### Where the Field Is Going
+
+The specific reasoning substrate will change. LLMs today, something else in ten years -- perhaps more efficient models, perhaps hybrid systems that combine neural and symbolic reasoning, perhaps something we haven't imagined. The need for this grounding layer will not change. Whatever comes after LLMs will still need explicit, domain-specific, human-curated knowledge structure to reason reliably in specialized domains. The book is not documenting a technology moment; it is identifying a permanent architectural requirement that the current moment has finally made practical to address.
+
+Retrieval-augmented generation\index{retrieval-augmented generation!as convergence point} is a point of convergence. The idea that language models should be grounded in retrieved context rather than relying solely on training is now mainstream. Knowledge graphs are one form that retrieved context can take -- structured, typed, provenance-tracked. The RAG paradigm and the KG approach are complementary. As RAG matures, the value of structured retrieval -- graphs over document chunks -- becomes clearer. The convergence is already happening.
+
+Structured world models\index{structured world models} in foundation models\index{foundation models} are another direction. Some researchers are exploring whether large models can learn internal representations that are more graph-like, with explicit entities and relationships. If that succeeds, the boundary between "retrieve from external graph" and "reason over internal structure" may blur. Even then, the argument for explicit, inspectable, provenance-tracked graphs remains: internal representations are opaque; external graphs are auditable. For domains where you need to trace a claim to a source, an external graph is the right architecture. The substrate may evolve. The need for that layer will not.
+
+What the field needs that isn't purely technical is harder to forecast but worth naming. Shared schemas for common domains would reduce duplicated effort and make graphs interoperable across research groups. Open corpora with permissive licensing would let extraction pipelines be benchmarked and compared. Community norms around provenance -- what it means to assert a relationship, how confidence should be calibrated, how retractions should propagate through downstream graphs -- are still being established. The engineering described in this book is relatively mature compared to the social infrastructure around it. Both are necessary.
+
+### An Invitation
+
+The fantasy described at the opening of Chapter 2 -- a machine that doesn't just store and retrieve facts but *understands* them -- was not wrong. It was premature. The people who built expert systems in the 1980s, who designed the Semantic Web in the 1990s, who curated Freebase in the 2000s, who funded Cyc for decades -- they had the right destination. What they lacked was a way to get the knowledge in. That was the bottleneck, and it held for fifty years.
+
+It doesn't hold anymore. Not because the problem became easier, but because a tool arrived that could do what knowledge engineers couldn't do at scale: read the text, understand the domain well enough to recognize what mattered, and produce structured output a graph could ingest. The extraction bottleneck was the wall. LLMs are, imperfectly and probabilistically and with all the caveats this book has tried to be honest about, a way through it.
+
+Adam existed. A robot scientist that could reason over a knowledge graph, form hypotheses, design experiments, and update its beliefs from the results -- that existed in 2009. What it needed, and what limited it to one carefully hand-curated domain, was a knowledge graph it couldn't build for itself. That constraint is lifted. Not completely, not cleanly, not without ongoing human judgment about schema and provenance and what the graph is for. But the bottleneck that kept Adam narrow is the same bottleneck this book is about. The knowledge graph part of the robot scientist is now buildable from the literature.
+
+What follows from that is genuinely unclear. The honest position is that we don't know what happens when the synthesis capability that has always been limited to unusually well-read human experts becomes available at the scale of the full published literature, across domains, continuously updated. The history of science suggests that moments when the cost of synthesis drops dramatically tend to produce results that weren't predicted in advance. The tools are here. The territory ahead is large and largely unmapped.
+
+# Appendix A: BFS Query Language Reference
+
+`\chaptermark{BFS Query Language}`{=latex}
+
+The BFS query\index{breadth-first search (BFS)} provides a single, general-purpose mechanism for retrieving subgraphs from the knowledge graph. It is designed to be constructed easily by an LLM while minimizing unnecessary context window consumption in the response.
+
+The design separates two orthogonal concerns:
+
+- **Topology**: BFS from one or more seed nodes up to a specified hop depth defines which nodes and edges are included in the subgraph. Filtering has no effect on this.
+- **Presentation**: Node and edge filters determine which items in that subgraph receive full metadata vs. a minimal stub. This is purely a serialization decision applied after the subgraph is computed.
+
+Stub items carry only enough information to understand the graph's topology without consuming context on irrelevant details. The LLM sees the full shape of the neighborhood while receiving rich data only where it matters.
+
+## Query Format
+
+```json
+{
+  "seeds": ["<entity_id>", ...],
+  "max_hops": <int>,
+  "node_filter": {
+    "entity_types": ["<type>", ...]
+  },
+  "edge_filter": {
+    "predicates": ["<predicate>", ...]
+  }
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `seeds` | Yes | Array of one or more canonical entity IDs to use as BFS starting points. All seeds are expanded simultaneously; the result is the union of their neighborhoods. |
+| `max_hops` | Yes | Maximum graph distance from any seed node. Values of 1–3 are typical; larger values may return very large subgraphs. |
+| `node_filter` | No | Controls which nodes receive full metadata. Nodes not matching the filter appear as stubs. Omit to receive full data on all nodes. |
+| `node_filter.entity_types` | No | List of entity type names. A node matches if its type is in this list. |
+| `edge_filter` | No | Controls which edges receive full metadata including provenance. Edges not matching appear as stubs. Omit to receive full data on all edges. |
+| `edge_filter.predicates` | No | List of predicate names. An edge matches if its predicate is in this list. |
+
+- If `node_filter` is omitted entirely, all nodes in the subgraph receive full data.
+- If `edge_filter` is omitted entirely, all edges receive full data including provenance.
+- Omitting both filters is appropriate for small subgraphs or debugging, but will produce large responses on dense neighborhoods.
+- Multiple seeds are useful when you want to explore the shared neighborhood of several entities simultaneously -- for example, finding publications co-authored by two researchers, or finding diseases connected to a set of genes.
+- If you do not yet have a canonical entity ID, call `search_entities()` first to resolve a name to an ID.
+
+## Response Format
+
+```json
+{
+  "seeds": ["<entity_id>", ...],
+  "max_hops": 2,
+  "node_count": <int>,
+  "edge_count": <int>,
+  "nodes": [
+    {
+      "id": "<entity_id>",
+      "entity_type": "<type>",
+      "<additional fields>": "..."
+    }
+  ],
+  "edges": [
+    {
+      "subject": "<entity_id>",
+      "predicate": "<predicate>",
+      "object": "<entity_id>",
+      "<additional fields>": "..."
+    }
+  ]
+}
+```
+
+_Full Node_
+
+A node that matches the `node_filter` (or when no filter is specified) includes all available metadata:
+
+```json
+{
+  "id": "PUB:PMC2386281",
+  "entity_type": "Publication",
+  "title": "The Diagnosis of Cushing's Syndrome",
+  "canonical_id": "PMID:18493314",
+  "year": 2008,
+  "journal": "Reviews in Endocrine and Metabolic Disorders",
+  "authors": ["Stewart PM"],
+  "abstract_snippet": "..."
+}
+```
+
+_Stub Node_
+
+A node that does not match the `node_filter` appears as a stub with only identity information:
+
+```json
+{
+  "id": "PERSON:67890",
+  "entity_type": "Person"
+}
+```
+
+_Full Edge_
+
+An edge that matches the `edge_filter` (or when no filter is specified) includes all provenance and metadata:
+
+```json
+{
+  "subject": "PERSON:12345",
+  "predicate": "AUTHORED",
+  "object": "PUB:PMC2386281",
+  "confidence": 0.97,
+  "provenance": [
+    {
+      "source_doc": "PMC2386281",
+      "section": "metadata",
+      "method": "structured_extraction",
+      "evidence_type": "primary_authorship"
+    }
+  ]
+}
+```
+
+_Stub Edge_
+
+An edge that does not match the `edge_filter` appears with topology only:
+
+```json
+{
+  "subject": "PERSON:12345",
+  "predicate": "COLLEAGUE_OF",
+  "object": "PERSON:67890"
+}
+```
+
+## LLM Prompt Template
+
+The following can be included in a system prompt or tool description to instruct an LLM how to construct BFS queries.
+
+To explore the knowledge graph, call `bfs_query()` with a JSON body. The query performs a breadth-first search from one or more seed nodes and returns the resulting subgraph.
+
+Nodes and edges in the subgraph are either **full** (all metadata and provenance included) or **stub** (identity only), depending on the filters you specify. Filtering affects only what data is returned, not which nodes and edges are included in the subgraph.
+
+**If you do not yet have a canonical entity ID, call `search_entities()` first.**
+
+_Query structure_
+
+```json
+{
+  "seeds": ["<id>", ...],       // one or more starting entity IDs
+  "max_hops": <int>,            // graph distance from seeds (1-3 recommended)
+  "node_filter": {              // optional: which nodes get full data
+    "entity_types": [...]       // e.g. ["Publication", "Disease", "Drug"]
+  },
+  "edge_filter": {              // optional: which edges get full data + provenance
+    "predicates": [...]         // e.g. ["AUTHORED", "TREATS", "INHIBITS"]
+  }
+}
+```
+
+Stub nodes contain only `{id, entity_type}`. Stub edges contain only `{subject, predicate, object}`. Omitting a filter entirely returns full data for all nodes or edges respectively.
+
+_Example 1: Find an author's publications with provenance_
+
+You know Dr. Stewart's entity ID and want to retrieve her publications along with the evidence that links her to each one. You don't need full metadata on other entities in the neighborhood.
+
+```json
+{
+  "seeds": ["PERSON:12345"],
+  "max_hops": 1,
+  "node_filter": {
+    "entity_types": ["Publication"]
+  },
+  "edge_filter": {
+    "predicates": ["AUTHORED"]
+  }
+}
+```
+
+Result: Full data on Publication nodes, full provenance on AUTHORED edges. Any other nodes or edges at hop 1 (e.g. institutional affiliations) appear as stubs.
+
+_Example 2: Explore a disease neighborhood, focusing on drugs_
+
+You want to understand what drugs are connected to Cushing's syndrome\index{Cushing's syndrome} within two hops, without being overwhelmed by the full metadata of every gene, symptom, and pathway in the neighborhood.
+
+```json
+{
+  "seeds": ["MeSH:D003480"],
+  "max_hops": 2,
+  "node_filter": {
+    "entity_types": ["Drug"]
+  }
+}
+```
+
+Result: Full data on Drug nodes. All other node types (Disease, Gene, Symptom, etc.) appear as stubs. All edges appear as stubs since no `edge_filter` targets specific predicates -- you can see the topology of the neighborhood without consuming context on provenance you haven't asked for.
+
+_Example 3: Find shared connections between two entities_
+
+You want to explore what two researchers have in common -- shared publications, shared diseases they've written about, or shared collaborators -- within two hops of either of them.
+
+```json
+{
+  "seeds": ["PERSON:12345", "PERSON:67890"],
+  "max_hops": 2,
+  "node_filter": {
+    "entity_types": ["Publication", "Disease"]
+  },
+  "edge_filter": {
+    "predicates": ["AUTHORED", "DISCUSSES"]
+  }
+}
+```
+
+Result: BFS expands from both researchers simultaneously. The returned subgraph is the union of both neighborhoods. Full data on Publications and Diseases they connect to; full provenance on AUTHORED and DISCUSSES edges. Everything else is stubbed. Nodes reachable from both seeds appear once, making shared connections directly visible.
+
+## Design Considerations
+
+_Topology and presentation are orthogonal_
+
+The subgraph returned by a BFS query is determined entirely by `seeds` and `max_hops`. Filters have no effect on which nodes or edges are included -- they only control how much data each item carries in the response. This means the LLM always sees an accurate picture of the graph's topology, regardless of what it filtered for. A stub node is not a missing node; it is a node whose full metadata was not requested.
+
+_Why stubs rather than omission_
+
+Omitting non-matching nodes entirely would produce a misleading picture of the graph. If Dr. Jones appears as a stub rather than disappearing, the LLM knows that Stewart has a connection to another person in the graph, and can issue a follow-up query for Jones if needed. Omission would make the graph appear sparser than it is, causing the LLM to miss connections it doesn't know to ask about.
+
+_Edge provenance is expensive context_
+
+A single edge with strong multi-source support may carry a long provenance list -- source documents, confidence scores, evidence types, extraction methods. Returning full provenance on every edge in a two-hop neighborhood would dominate the context window on most queries. The `edge_filter` gives the LLM precise control over where that cost is paid.
+
+_Multiple seeds enable relational queries_
+
+Accepting an array of seeds rather than a single seed allows the LLM to express relational questions -- "what do these entities have in common?" -- without requiring a specialized query type. The union semantics are simple to implement and simple to reason about.
+
+_Filters are independently optional_
+
+`node_filter` and `edge_filter` compose independently. You can request full node data with stub edges (useful when you want entity details but not provenance), full edge provenance with stub nodes (useful when you want to audit support for a relationship without loading entity metadata), both (for focused high-detail queries), or neither (for small graphs or debugging). No special cases are required.
+
+_BFS depth guidance_
+
+Depth 1 is appropriate for direct relationships: an author's publications, a drug's known indications, a gene's associated diseases. Depth 2 surfaces indirect connections: diseases associated with genes that a drug targets, co-authors of papers a researcher has written. Depth 3 and beyond can return very large subgraphs on well-connected nodes and should be used with targeted filters. When in doubt, start at depth 1 and increase.
+
+# Appendix B: Reference Implementation Notes
+
+`\chaptermark{Reference Implementation}`{=latex}
+
+This appendix documents implementation details of the medlit reference project: the identity server abstract interface, the Postgres-backed implementation, and the ingestion pipeline's work queue, artifact files, and shared code. These details are specific to one implementation and will evolve; the principles behind them are in Chapters 11 and 12.
+
+## Identity Server Abstract Interface
 
 ```python
 from abc import ABC, abstractmethod
@@ -957,7 +1508,7 @@ class IdentityServer(ABC):
         """
 ```
 
-### Domain-Pluggable Behaviour
+## Domain-Pluggable Behaviour
 
 The identity server ABC deliberately leaves the following decisions to the domain:
 
@@ -968,7 +1519,7 @@ The identity server ABC deliberately leaves the following decisions to the domai
 | Merge survivor selection | `DomainSchema.preferred_entity` |
 | Promotion thresholds | Domain `PromotionPolicy` |
 
-#### Survivor Selection
+### Survivor Selection
 
 `DomainSchema` declares an abstract method for survivor selection:
 
@@ -990,7 +1541,7 @@ def preferred_entity(self, candidates: list[BaseEntity]) -> BaseEntity:
 
 `on_entity_added` calls `preferred_entity` to determine `survivor_id` before calling `merge`. Survivor policy is fully domain-controlled and does not belong in the identity server ABC.
 
-### Entity Status
+## Entity Status
 
 Entities carry one of three statuses:
 
@@ -1000,14 +1551,12 @@ Entities carry one of three statuses:
 | `canonical` | Has a stable external ID (e.g. MeSH term, HGNC symbol) or has been promoted. Promotion is a one-time transition. |
 | `merged` | Absorbed into another entity. Retained for redirect lookups via `merged_into`. Excluded from normal queries. |
 
-#### Merge × Promotion Status Rules
+### Merge × Promotion Status Rules
 
 The status of the survivor after a merge:
 
-- **provisional + provisional → provisional.** The merged entity remains
-  promotable via the normal promotion policy.
-- **canonical + anything → canonical.** The survivor retains canonical status
-  regardless of the absorbed entity's status.
+- **provisional + provisional → provisional.** The merged entity remains promotable via the normal promotion policy.
+- **canonical + anything → canonical.** The survivor retains canonical status regardless of the absorbed entity's status.
 
 `promote` behaviour by status:
 
@@ -1015,7 +1564,7 @@ The status of the survivor after a merge:
 - **canonical:** no-op; returns the existing canonical ID.
 - **merged:** redirect to survivor ID; emit a log warning; do not raise.
 
-### Idempotency Contract
+## Idempotency Contract
 
 Every mutating operation must be safe to call more than once with the same arguments. Workers may retry after transient failures and must not produce inconsistent state by doing so.
 
@@ -1026,11 +1575,11 @@ Every mutating operation must be safe to call more than once with the same argum
 | `merge` | Advisory lock + existence check; already-merged entities are a no-op |
 | `on_entity_added` | Delegates to `find_synonyms` (read-only) and `merge` (idempotent) |
 
-### Recommended Implementation: Postgres-Backed
+## Postgres-Backed Implementation
 
 Postgres is the natural backing store because it is already in the stack, provides row-level and advisory locking for cross-replica atomicity, and shares a transaction boundary with entity and relationship writes. No additional coordination service is required for the identity server itself.
 
-#### Locking Strategy
+### Locking Strategy
 
 **`resolve`** — use `INSERT ... ON CONFLICT DO NOTHING` on a unique index over the normalised mention string and domain. Two concurrent workers resolving the same mention will serialize at the index; the second gets the ID the first created.
 
@@ -1038,9 +1587,9 @@ Postgres is the natural backing store because it is already in the stack, provid
 
 **`merge`** — acquire a Postgres advisory lock keyed on the lexicographically sorted pair (or set) of entity IDs before beginning the merge transaction. This prevents two workers from merging the same pair in opposite orders, which would produce a deadlock or a double-merge. The advisory lock is released when the transaction commits.
 
-**`on_entity_added`** — must be called inside the same transaction as the entity insert. Synonym detection (`find_synonyms`) is read-only and acquires no locks.  The subsequent `merge` call acquires its own advisory lock as above.
+**`on_entity_added`** — must be called inside the same transaction as the entity insert. Synonym detection (`find_synonyms`) is read-only and acquires no locks. The subsequent `merge` call acquires its own advisory lock as above.
 
-#### Authority Lookup Caching in `resolve`
+### Authority Lookup Caching in `resolve`
 
 Authority lookup is a network call and is not idempotent in the face of transient failures. Results are cached in Redis, shared across all replicas:
 
@@ -1053,13 +1602,13 @@ Authority lookup is a network call and is not idempotent in the face of transien
 
 **Residual risk** — if the API call succeeds but the process crashes before the DB insert commits, a retry hits the cache, gets the canonical ID, and re-attempts the insert. `ON CONFLICT DO NOTHING` handles this correctly.
 
-#### Synonym Detection via pgvector\index{pgvector}
+### Synonym Detection via pgvector\index{pgvector}
 
 `find_synonyms` uses vector embeddings and cosine similarity via the `pgvector` extension. Approximate nearest-neighbour search at scale is its core capability, and keeping similarity queries inside Postgres means they share the same transaction boundary as entity operations with no additional service.
 
 `on_entity_added` embeds the new entity (if not already embedded) and queries pgvector for neighbours above a domain-defined similarity threshold. The result list is passed to `preferred_entity` and then to `merge`.
 
-#### Schema Notes
+### Schema Notes
 
 A single `entities` table with a `status` column is preferred over separate tables for provisional and canonical entities. Single-table layout simplifies joins and allows a single index to cover all status-filtered queries.
 
@@ -1069,106 +1618,14 @@ Merged entities are retained with `status = 'merged'` and a `merged_into` foreig
 
 The Postgres-backed implementation is correct under any number of concurrent workers or server replicas without additional coordination:
 
-- **`resolve` races** are handled by the unique index and `ON CONFLICT DO NOTHING`.  The second worker gets the row the first created; no duplicate entities are produced.
+- **`resolve` races** are handled by the unique index and `ON CONFLICT DO NOTHING`. The second worker gets the row the first created; no duplicate entities are produced.
 - **`promote` races** are serialized by `SELECT FOR UPDATE`. Only one worker performs the transition; the others see the already-canonical row and return it.
 - **`merge` races** are serialized by the advisory lock on the sorted entity ID pair. Two workers attempting to merge the same pair in opposite orders will queue behind the same lock; the second will find the entities already merged and return the survivor ID as a no-op.
 - **`on_entity_added` races** — the requirement that this fires inside the entity insert transaction means two workers inserting different entities that are synonyms of each other will each trigger synonym detection after their own insert is visible. The first to detect the other will attempt a merge; the advisory lock ensures this is safe.
 
 Redis is required only for authority lookup caching in `resolve`. If authority lookup is not used (domain is no-op), Redis is not required for the identity server.
 
-## Chapter 12: The Ingestion Pipeline
-
-`\chaptermark{The Ingestion Pipeline}`{=latex}
-
-### Why Multiple Passes at All
-
-The temptation is to do extraction end-to-end in one shot: send the document to the model, get back entities and relationships, done. That approach fails at scale for reasons that are worth stating explicitly. A single monolithic pass has a single point of failure -- if anything goes wrong, you restart from scratch. It produces output that is hard to debug, because you can't inspect intermediate states. And it conflates concerns that are better handled separately: entity extraction, identity resolution, relationship extraction, and assembly are different problems with different failure modes and different recovery strategies.
-
-Staging the pipeline into multiple passes addresses all of this. Each pass has a well-defined input and output. Failures are recoverable: if the extraction pass fails on document 47, you fix the issue and rerun that pass from document 47, not from document 1. Intermediate artifacts are inspectable -- you can look at the raw entity extractions before resolution, or the resolved entities before relationship extraction, and see exactly where the pipeline went wrong. The per-document bundle becomes the natural unit of work between passes: each document produces a bundle that can be validated, cached, and merged independently. None of this is medlit-specific. It's good pipeline design for any extraction problem at non-trivial scale.
-
-The medlit batch pipeline uses four stages, each with its own script and a well-defined artifact at its output:
-
-1. **Vocabulary** (`fetch_vocab`): LLM pass over all papers to build a shared vocabulary of canonical entity names and their aliases. Output: `vocab.json` and a seeded synonym cache.
-2. **Extract** (`extract`): LLM entity and relationship extraction for each paper, using the vocabulary as context. Output: per-paper `paper_*.json` artifact files in the `extracted/` directory.
-3. **Ingest** (`ingest`): Identity-server-based deduplication and canonical ID assignment across all extracted bundles. Output: `entities.json`, `relationships.json`, and an ID map in `merged/`.
-4. **Build bundle** (`build_bundle`): Assembles the kgbundle -- the loadable artifact consumed by kgserver. Fetches titles for cited papers from NCBI `esummary`. Output: `entities.jsonl`, `relationships.jsonl`, and supporting files in `bundle/`.
-
-That ordering matters. You need a consistent entity vocabulary before extraction can use it. You need resolved entity IDs before you can aggregate relationships across documents. And you need the aggregated merged output before you can build the final bundle. Other orderings are possible, but the principle holds: separate concerns, make each pass debuggable, design for partial failure and restart.
-
-### Parsing: Getting to Text
-
-Whatever your source format, you need to get to structured text before you can extract anything. The model reads text; it doesn't read PDF layout or XML tags. JATS XML\index{JATS XML} -- the format used by PubMed Central -- is medlit's case: a structured representation of journal articles with metadata, abstract, and body sections. Yours might be PDFs, HTML, EPUB, proprietary formats, or plain text that's already clean. The parser's job is to produce a document representation that preserves structure the extractor can use: section boundaries, paragraph boundaries, and the actual text content.
-
-Two decisions matter regardless of format. First, how do you identify section boundaries? In scientific papers, the distinction between Methods, Results, and Discussion carries semantic weight -- a claim in Results is different from a claim in Discussion. In legal documents, sections and subsections matter for citation. The parser should expose this structure so downstream passes can use it. Second, how do you chunk for extraction? Documents are often too long to send to the model in one call. Chunk too small and you lose context -- the referent of "it" or "the compound" may be in the previous chunk. Chunk too large and you exceed model context limits, dilute the signal, or hit token budgets that make the run expensive. Overlapping chunks\index{overlapping chunks} can help: each sentence appears in at least one chunk, so no sentence is orphaned at a boundary. Sentence boundaries are a practical constraint worth respecting -- splitting mid-sentence produces fragments that are harder for the model to interpret correctly.
-
-### Extraction: The LLM Pass
-
-This is where your schema meets the text. The extraction prompt is not a generic "extract entities and relationships" request. It is a binding of your entity types and relationship types to natural language, written so the model understands exactly what to look for. A good prompt names each entity type with a clear definition, lists each relationship type with its subject and object constraints, and instructs the model to capture provenance alongside content -- which passage, what hedging language, what confidence. The prompt is the place where domain expertise gets translated into extraction behavior. A clinician reviewing the prompt should be able to assess whether it matches their understanding of the domain.
-
-The tradeoff between prompt specificity and prompt flexibility is real. A highly specific prompt -- "extract only direct assertions, ignore speculative language, require explicit subject-verb-object structure" -- tends to produce higher precision and lower recall. The model extracts less, but what it extracts is more reliable. A more flexible prompt -- "extract any relationship that might be implied, include hedged claims" -- tends to produce higher recall and lower precision. You get more relationships, but more of them will need filtering or correction. There's no universal right answer. The right balance depends on your domain, your tolerance for noise, and what you're doing with the graph. Iteration over the prompt is the design method. You run extraction on a sample, inspect the output, adjust the prompt, repeat. There's no shortcut.
-
-### Vocabulary: Building a Shared Terminology\index{vocabulary pass}
-
-Before extraction, medlit runs a dedicated vocabulary pass over all the papers in the batch. The idea: before you try to resolve "BRCA1," "breast cancer gene 1," and "BRCA1 protein" to the same entity, you establish a shared vocabulary of entity names and their variants. A vocabulary pass asks the LLM a narrower, cheaper question than full extraction -- "given the text of this paper, list the distinct named entities you see and their common aliases" -- and aggregates the answers across all papers into a canonical name list.
-
-The output of the vocabulary pass feeds directly into extraction. When the extraction prompt runs for each paper, the shared vocabulary is injected as context: "these are the preferred names for entities seen across the corpus; use them." This keeps extraction consistent across workers and across time. Without it, two papers that both mention GPX4 might extract it as "GPX4," "glutathione peroxidase 4," and "phospholipid hydroperoxide glutathione peroxidase" in three different bundles, and identity resolution must sort them out later. With the vocabulary priming the extraction prompt, the model tends to use a consistent preferred form, reducing the deduplication burden downstream.
-
-Not every domain needs a vocabulary pass. If your corpus uses consistent terminology, extraction may produce sufficiently normalized output without it. But medicine, law, and chemistry -- any field where the same concept has many names and many names map to the same concept -- will see a measurable reduction in deduplication noise. Think of it as schema binding at the lexical level: you're telling the model what things are called before asking it to extract relationships among them.
-
-### Deduplication
-
-The same entity extracted from many documents will appear under slightly different names. "Aspirin," "acetylsalicylic acid," "ASA," and "2-acetoxybenzoic acid" are one drug. "Type 2 diabetes," "T2DM," "diabetes mellitus type 2," and "adult-onset diabetes" are one disease. The deduplication stage groups mentions, resolves them to canonical forms, and handles the ambiguous cases. This is where the gap between "a list of extracted facts" and "a coherent graph" starts to close.
-
-The details vary by domain. In medicine, authority lookup -- MeSH, RxNorm, HGNC, and the rest -- does much of the work: many apparent synonyms resolve to the same canonical ID automatically. What remains after authority lookup is the residue: novel entities, institution-specific abbreviations, terms that aren't in any vocabulary yet. For those, you need other signals. Embedding similarity can help: mentions that are semantically close in embedding space may be the same entity. So can co-occurrence: if "compound X" and "imatinib" appear in the same document and the context suggests they're the same, that's evidence. The hard cases are the ambiguous ones -- "ACE" could be angiotensin-converting enzyme or the gene, "CRF" could be corticotropin-releasing factor or chronic renal failure. Resolving those may require context, domain heuristics, or human review. The universal part: you need a deduplication strategy, and it should run before or alongside relationship extraction so that relationships reference resolved entities, not raw strings.
-
-### Assembly
-
-Once you have per-document extractions -- entities resolved, relationships extracted -- you need to merge them into a coherent whole. Assembly is not just concatenation. When multiple documents assert the same relationship, that's meaningful signal. "Drug A treats Disease B" from one paper is weaker than "Drug A treats Disease B" from five independent papers. The assembly stage should aggregate evidence across sources: one relationship record with a provenance list, not five duplicate edges. That aggregation is what makes the graph useful for reasoning -- you can weight relationships by how many sources support them, filter by evidence type, and detect when sources conflict.
-
-The structure of the final bundle is worth thinking about carefully before you start. What does a "document" in your graph look like? Is it a node with metadata and outgoing edges to the relationships it supports? Are relationships first-class with document references, or are documents first-class with relationship references? The choice affects query patterns, provenance traversal, and how you handle updates when you re-ingest a document with corrections. Changing the bundle structure later, once you have data and downstream consumers, is expensive. Get it right early.
-
-### Progress Tracking and Resumability\index{resumability}
-
-Large ingestion runs fail partway through. A run over 100,000 documents will hit rate limits, network timeouts, model outages, or your own mistakes. If the pipeline has no notion of progress, you restart from zero every time. That's acceptable for a research prototype. It's not acceptable for something you run regularly.
-
-Design for restartability\index{restartability} from the beginning. Each document should have a processing status: not started, in progress, completed, failed. The pipeline should record which documents have been fully processed and which haven't. On restart, it should skip completed documents and resume from the first incomplete one. Checkpointing\index{checkpointing} within a document -- if a single document requires multiple LLM calls, record which chunks have been processed -- can help for very long documents, though the document is usually the right granularity. The progress store should be persistent and survive process restarts. This isn't glamorous work. It's the difference between a pipeline you can run once as a demo and a pipeline you can run every week as part of your workflow.
-
-### Design Principles
-
-The concepts above translate directly into four implementation commitments.
-
-**Dedup-on-write.** The `IdentityServer` resolves entity identity and detects synonyms incrementally as each entity is written. There is no global deduplication pass over the corpus; papers can be ingested concurrently and the identity server handles merging correctly under concurrent access.
-
-**Per-paper atomicity.** Each paper moves through stages independently. A failure at any stage leaves the paper at its last committed status; the next available worker picks it up and retries. No paper's failure affects any other.
-
-**Durable checkpoints.** Raw fetched text and raw LLM extraction output are stored durably before any graph writes. This means a schema change, extraction bug, or infrastructure failure can be recovered from without re-fetching or re-paying LLM costs.
-
-**Shared pipeline code.** The MCP tool and the batch runner call the same stage functions. There is no separate implementation for interactive versus batch use.
-
-### Stages
-
-#### 1. Fetch
-
-Retrieves raw text or XML for a PMC ID from the PMC API and stores it in `ingest_jobs.raw_text`. This stage is pure I/O and completely independent of all other work. A previously fetched paper never needs to be re-fetched.
-
-#### 2. Extract
-
-Runs the LLM extraction call for a paper. Before calling the LLM, the worker queries the live graph for the most frequent entities of each relevant type and injects them as context. This keeps extraction consistent across workers and across time — the context improves as the corpus grows.
-
-The raw LLM output is stored in `ingest_jobs.raw_extraction` and also written to a paper artifact file (see below) before any graph writes occur.
-
-#### 3. Ingest
-
-Writes entities and relationships from `raw_extraction` to the graph. For each entity:
-
-1. `identity_server.resolve(mention, context)` — returns a canonical or provisional entity ID, creating one if needed, idempotently.
-2. `identity_server.on_entity_added(entity_id, context)` — triggers synonym detection and merge.
-
-Both calls happen **inside the same transaction as the entity insert**, so synonym detection fires only after the row is durably committed and visible. This prevents the race where two concurrent workers see each other as merge candidates before either insert completes.
-
-Relationship writes are in the same transaction as the entity inserts for the paper. There is no gap between them.
-
-### Work Queue\index{work queue}
+## Ingestion Pipeline: Work Queue
 
 A Postgres table coordinates all work:
 
@@ -1204,7 +1661,7 @@ Progress is trivially observable:
 SELECT status, count(*) FROM ingest_jobs GROUP BY status;
 ```
 
-### Paper Artifact Files
+## Paper Artifact Files
 
 After `extract_stage` stores `raw_extraction` in Postgres, it also writes a per-paper artifact file using atomic write-then-rename:
 
@@ -1218,8 +1675,7 @@ tmp.write_text(json.dumps({
 tmp.rename(artifact_dir / f"paper_{pmcid}.json")
 ```
 
-Including both `raw_text` and `raw_extraction` makes each file a self-contained
-record of everything that happened for that paper.
+Including both `raw_text` and `raw_extraction` makes each file a self-contained record of everything that happened for that paper.
 
 **These files serve three purposes:**
 
@@ -1239,10 +1695,9 @@ python -m kgserver.ingest --from-artifacts ./artifacts/ --ingest-workers 16
 
 Reads `paper_*.json` from the directory, inserts each into `ingest_jobs` with the appropriate status and fields populated from the file (`INSERT ... ON CONFLICT DO NOTHING` skips papers already in the table), then lets the normal worker pool handle the rest.
 
-### Parallelism
+## Parallelism
 
-Different stages have different bottlenecks and should have independently tunable
-worker counts:
+Different stages have different bottlenecks and should have independently tunable worker counts:
 
 | Stage   | Bottleneck                       |
 |---------|----------------------------------|
@@ -1252,7 +1707,7 @@ worker counts:
 
 The batch runner accepts separate concurrency limits per stage. Running multiple instances of the batch runner across machines is safe; all instances share the same `ingest_jobs` table and coordinate via `SKIP LOCKED`.
 
-### Batch Ingestion
+## Batch Ingestion
 
 The batch pipeline is driven by a shell script that sequences the four stages in order:
 
@@ -1286,7 +1741,7 @@ uv run python -m examples.medlit.scripts.build_bundle \
 
 Stages 1 and 2 are embarrassingly parallel at the paper level and can be run with multiple workers. Stage 3 parallelizes authority lookups (MeSH, UniProt, HGNC) within a single run using `asyncio.gather` with a semaphore, so HTTP calls to authority APIs happen concurrently rather than sequentially. Stage 4 is fast and single-threaded -- its main network cost is the batched NCBI `esummary` call for cited-paper titles, which takes only a handful of requests regardless of corpus size.
 
-### MCP Tool
+## MCP Tool
 
 The MCP tool is a convenience for a user who wants to pull in one or a few papers during a query session and have them available immediately. It is not intended for bulk operations.
 
@@ -1314,19 +1769,19 @@ async def ingest_paper(pmcid: str) -> dict:
 
 The `_run_pass2_pass3_load` function is the shared implementation used by both the MCP tool and the background ingest worker. It runs `ingest`, `build_bundle`, and `load_bundle_incremental` in sequence, so that after it returns the paper is live in the graph without a server restart.
 
-### Extraction Output Format
+## Extraction Output Format
 
 The artifact file captures what the LLM decided, before the identity server assigns any entity IDs. Mentions and evidence strings include their location in the source document so that any claim can be verified against the original text.
 
-`raw_text` is stored as the original PMC XML rather than stripped plain text.  PMC XML has explicit section labels (`<sec>`, `<title>`, `<p>`) that make section and paragraph extraction reliable, and preserving the structure means location references remain valid if the artifact is re-ingested later.
+`raw_text` is stored as the original PMC XML rather than stripped plain text. PMC XML has explicit section labels (`<sec>`, `<title>`, `<p>`) that make section and paragraph extraction reliable, and preserving the structure means location references remain valid if the artifact is re-ingested later.
 
-Most paper metadata and cited references are available as structured fields in the PMC XML and are parsed directly by the fetch stage rather than extracted by the LLM. This makes them reliable and cheap — no prompt engineering required.  Each cited PMC ID is also a candidate for further ingestion, making the reference list a natural source for corpus expansion.
+Most paper metadata and cited references are available as structured fields in the PMC XML and are parsed directly by the fetch stage rather than extracted by the LLM. This makes them reliable and cheap — no prompt engineering required. Each cited PMC ID is also a candidate for further ingestion, making the reference list a natural source for corpus expansion.
 
 ```json
 {
   "pmcid": "PMC12345",
   "extracted_at": "2026-03-17T14:23:00Z",
-  "model": "claude-sonnet-4-6",
+  "model": "claude-sonnet-xxx",
   "metadata": {
     "title": "Serum cortisol as a diagnostic marker for hypercortisolism",
     "authors": [
@@ -1389,7 +1844,7 @@ Key properties:
 - **Model and timestamp.** Records exactly what produced this output, which is essential when comparing extractions before and after a prompt or model change.
 - **No graph state.** Nothing about merges, status, or canonical IDs. That is all rebuilt fresh by the identity server on each ingest.
 
-### Shared Pipeline Code
+## Shared Pipeline Code
 
 The four pipeline stages share their core logic across both the batch CLI and the MCP/server path. The batch CLI calls stage scripts directly; the MCP tool and background ingest worker call `_run_pass2_pass3_load`, which sequences the ingest, build_bundle, and load_bundle_incremental steps using the same underlying functions:
 
@@ -1409,446 +1864,3 @@ def _run_pass2_pass3_load(
 `run_ingest` is the identity-server deduplication stage. `run_build_bundle` assembles the kgbundle including NCBI title fetching. `load_bundle_incremental` pushes the new bundle into the live graph storage without a restart.
 
 The vocabulary and extraction stages are not in this shared path -- they are CLI-only for batch runs, since interactive single-paper ingestion via the MCP tool skips the vocabulary pass (the vocabulary built from the existing corpus is already embedded in the seeded synonym cache). For the MCP use case, the paper is extracted with the current vocabulary as context, then ingested, and the bundle is rebuilt and reloaded.
-
-# Part IV: What It Makes Possible
-
-## Chapter 13: What Your Graph Can Do
-
-`\chaptermark{What Your Graph Can Do}`{=latex}
-
-The value of the graph is in what grounded reasoning becomes possible, not in the serving layer. Evidence, not instruction.
-
-### The Server Is Not the Point
-
-This chapter is about what becomes possible once your graph exists, not about how to build a particular server. The medlit project has a serving layer -- kgserver -- with REST, GraphQL, MCP, and persistent storage backends. You might build something like it, or you might expose your graph through a completely different interface, or you might not serve it externally at all. The infrastructure choices are yours. What this chapter is really about is the capability space: what can a well-constructed knowledge graph actually do for someone?
-
-That distinction matters because it's easy to conflate "I have a graph" with "I have a graph server." The graph is the data structure and the relationships it encodes. The server is one way to expose it. You could serve the same graph through a REST API, a GraphQL endpoint, an MCP server, a SPARQL endpoint, a custom query language, or no server at all -- just load it into memory and run Python scripts against it. The capabilities we're about to describe -- direct querying, visualization, grounding LLMs, hypothesis generation -- are capabilities of the graph. The server is a delivery mechanism. Choose one that fits your users and your deployment constraints; don't let the choice of server obscure what the graph itself enables.
-
-### Direct Querying
-
-The basics: entity lookup, relationship queries, graph neighborhood traversal. These are useful and often sufficient for many applications. The interesting design question isn't which API style (REST, GraphQL, something else) but what the right query primitives are for your domain. What questions will your users actually ask?
-
-A biomedical researcher might ask: "What drugs are known to treat this condition?" "What genes are associated with this disease?" "What's the evidence for this drug-gene interaction?" A legal researcher might ask: "What cases cite this statute?" "What statutes does this case interpret?" The primitives that support these questions -- get entity by ID, get relationships of type X from entity Y, get N-hop neighborhood, filter by provenance -- are similar across domains. The *semantics* of what counts as a good answer differ. A drug-disease "treats" relationship in medicine has different evidentiary standards than a case-statute "cites" relationship in law. Your query interface should expose primitives that map cleanly to your domain's question types, not force users to translate their questions into a generic graph query language.
-
-At minimum, you need: entity lookup (by name or canonical ID), relationship enumeration (what connects to this entity, and how), and some form of traversal (neighbors, N-hop expansion, path finding). Provenance-aware queries -- "give me this relationship and its sources" -- belong in the primitive set if your domain cares about evidence, which most serious domains do. Everything else is optimization.
-
-### Graph Visualization
-
-Chapter 9 covered visualization as a diagnostic tool for pipeline development. Here the question is different: what does visualization do for an end user exploring the graph?
-
-A browsable, zoomable view of entities and relationships lets users navigate structure that would be tedious to reconstruct from query output. "Show me everything connected to this drug" produces a list; a force-directed layout\index{force-directed layout} produces a picture where clusters, bridges, and outliers are visible at a glance. For exploration and discovery -- "what's in this neighborhood?" "what connects these two things?" -- visualization often beats tabular output. The implementation cost is modest if you already have the query primitives; the value for users who think spatially about their domain is high. If you build nothing else on top of your graph, build this.
-
-### Grounding LLM Inference
-
-The pattern that changes what a language model can do: instead of asking a model to reason from its training data, give it structured, typed, provenance-tracked claims from your graph and ask it to reason from those. The difference in reliability is substantial. A model hallucinating over raw text and a model reasoning over a curated graph with explicit provenance are doing qualitatively different things, even if they look similar from the outside. This is the integration that makes a knowledge graph more than a database.
-
-The mechanics are straightforward. A user asks a question. Your system retrieves relevant subgraphs -- entities and relationships that match the question's scope -- and injects them into the model's context. The model reasons over that context and produces an answer. The answer is grounded in the retrieved graph, not in the model's training. You can cite the sources. You can trace the reasoning path. When the graph is wrong, you fix the graph; you don't retrain the model.
-
-The retrieval step matters. "Relevant" means different things for different questions. A question about a specific drug might need that drug's neighborhood, its indications, its interactions, and the evidence for each. A question about a disease might need the disease's subtypes, associated genes, known treatments, and the studies that support those links. Designing the retrieval logic -- what subgraph to fetch for what question -- is where domain knowledge enters. A generic "fetch entities mentioned in the question" often works; a retrieval strategy tuned to your schema and your users' question patterns works better. The graph gives you something to retrieve. The retrieval strategy determines how well the model uses it.
-
-### MCP as the Integration Point\index{Model Context Protocol (MCP)}
-
-The Model Context Protocol is worth understanding as an architectural pattern, not just as a specific technology. The idea is that a knowledge graph should be a first-class context source for LLM-based systems -- something that agents, assistants, and reasoning pipelines can query as naturally as a human researcher would reach for a reference database. Whether you use MCP specifically or some other integration approach, the principle is sound: your graph is most powerful when it's actively grounding inference, not sitting passively waiting to be queried by humans.
-
-MCP defines a standard way for AI systems to discover and call tools. A knowledge graph exposed as an MCP server offers tools like "find entities matching this query," "get the neighborhood of this entity," "retrieve relationships of type X." An LLM-powered assistant with access to that server can answer domain questions by querying the graph, synthesizing the results, and citing the sources. The user gets an answer grounded in your curated knowledge rather than in the model's training distribution. The integration is loose: the model doesn't need to know your schema in advance; it discovers the available tools and uses them. That looseness is a feature. Your graph can evolve without breaking every consumer.
-
-If you're not using MCP, the same pattern applies. The graph needs to be queryable by whatever system is doing the reasoning. REST, GraphQL, or a custom API all work. The architectural point is that the graph should be *available* to the reasoning layer, not a separate system that humans query manually. Passive retrieval -- human runs query, copies result, pastes into chat -- is a fallback. Active grounding -- the reasoning system queries the graph as part of generating its answer -- is the target.
-
-### BFS Queries\index{breadth-first search (BFS)}
-
-This section is unusually detailed. I hope it will be helpful enough to justify that. Here I describe a JSON-based query language that I designed for my app. The guiding design principles were LLM friendliness, both in the use of JSON syntax and in the conservation of context window budget. Initially I favored GraphQL but later learned that LLMs really do prefer JSON. And context window is a precious commodity in LLM work.
-
-The BFS query ([breadth-first search](https://en.wikipedia.org/wiki/Breadth-first_search)) provides a single, general-purpose mechanism for retrieving subgraphs from the knowledge graph. It is designed to be constructed easily by an LLM while minimizing unnecessary context window consumption in the response.
-
-The design separates two orthogonal concerns:
-
-- **Topology**: BFS from one or more seed nodes up to a specified hop depth defines which nodes and edges are included in the subgraph. Filtering has no effect on this.
-- **Presentation**: Node and edge filters determine which items in that subgraph receive full metadata vs. a minimal stub. This is purely a serialization decision applied after the subgraph is computed.
-
-Stub items carry only enough information to understand the graph's topology without consuming context on irrelevant details. The LLM sees the full shape of the neighborhood while receiving rich data only where it matters.
-
-**Query Format**
-
-```json
-{
-  "seeds": ["<entity_id>", ...],
-  "max_hops": <int>,
-  "node_filter": {
-    "entity_types": ["<type>", ...]
-  },
-  "edge_filter": {
-    "predicates": ["<predicate>", ...]
-  }
-}
-```
-
-| Field | Required | Description |
-|---|---|---|
-| `seeds` | Yes | Array of one or more canonical entity IDs to use as BFS starting points. All seeds are expanded simultaneously; the result is the union of their neighborhoods. |
-| `max_hops` | Yes | Maximum graph distance from any seed node. Values of 1–3 are typical; larger values may return very large subgraphs. |
-| `node_filter` | No | Controls which nodes receive full metadata. Nodes not matching the filter appear as stubs. Omit to receive full data on all nodes. |
-| `node_filter.entity_types` | No | List of entity type names. A node matches if its type is in this list. |
-| `edge_filter` | No | Controls which edges receive full metadata including provenance. Edges not matching appear as stubs. Omit to receive full data on all edges. |
-| `edge_filter.predicates` | No | List of predicate names. An edge matches if its predicate is in this list. |
-
-- If `node_filter` is omitted entirely, all nodes in the subgraph receive full data.
-- If `edge_filter` is omitted entirely, all edges receive full data including provenance.
-- Omitting both filters is appropriate for small subgraphs or debugging, but will produce   large responses on dense neighborhoods.
-- Multiple seeds are useful when you want to explore the shared neighborhood of several entities simultaneously -- for example, finding publications co-authored by two researchers, or finding diseases connected to a set of genes.
-- If you do not yet have a canonical entity ID, call `search_entities()` first to resolve a name to an ID.
-
-**Response Format**
-
-```json
-{
-  "seeds": ["<entity_id>", ...],
-  "max_hops": 2,
-  "node_count": <int>,
-  "edge_count": <int>,
-  "nodes": [
-    {
-      "id": "<entity_id>",
-      "entity_type": "<type>",
-      "<additional fields>": "..."
-    }
-  ],
-  "edges": [
-    {
-      "subject": "<entity_id>",
-      "predicate": "<predicate>",
-      "object": "<entity_id>",
-      "<additional fields>": "..."
-    }
-  ]
-}
-```
-
-_Full Node_
-
-A node that matches the `node_filter` (or when no filter is specified) includes all available metadata:
-
-```json
-{
-  "id": "PUB:PMC2386281",
-  "entity_type": "Publication",
-  "title": "The Diagnosis of Cushing's Syndrome",
-  "canonical_id": "PMID:18493314",
-  "year": 2008,
-  "journal": "Reviews in Endocrine and Metabolic Disorders",
-  "authors": ["Stewart PM"],
-  "abstract_snippet": "..."
-}
-```
-
-_Stub Node_
-
-A node that does not match the `node_filter` appears as a stub with only identity information:
-
-```json
-{
-  "id": "PERSON:67890",
-  "entity_type": "Person"
-}
-```
-
-_Full Edge_
-
-An edge that matches the `edge_filter` (or when no filter is specified) includes all provenance and metadata:
-
-```json
-{
-  "subject": "PERSON:12345",
-  "predicate": "AUTHORED",
-  "object": "PUB:PMC2386281",
-  "confidence": 0.97,
-  "provenance": [
-    {
-      "source_doc": "PMC2386281",
-      "section": "metadata",
-      "method": "structured_extraction",
-      "evidence_type": "primary_authorship"
-    }
-  ]
-}
-```
-
-_Stub Edge_
-
-An edge that does not match the `edge_filter` appears with topology only:
-
-```json
-{
-  "subject": "PERSON:12345",
-  "predicate": "COLLEAGUE_OF",
-  "object": "PERSON:67890"
-}
-```
-
-**LLM Prompt**
-
-The following section can be included in a system prompt or tool description to instruct an LLM how to construct BFS queries.
-
-To explore the knowledge graph, call `bfs_query()` with a JSON body. The query performs a breadth-first search from one or more seed nodes and returns the resulting subgraph.
-
-Nodes and edges in the subgraph are either **full** (all metadata and provenance included) or **stub** (identity only), depending on the filters you specify. Filtering affects only what data is returned, not which nodes and edges are included in the subgraph.
-
-**If you do not yet have a canonical entity ID, call `search_entities()` first.**
-
-_Query structure_
-
-```json
-{
-  "seeds": ["<id>", ...],       // one or more starting entity IDs
-  "max_hops": <int>,            // graph distance from seeds (1-3 recommended)
-  "node_filter": {              // optional: which nodes get full data
-    "entity_types": [...]       // e.g. ["Publication", "Disease", "Drug"]
-  },
-  "edge_filter": {              // optional: which edges get full data + provenance
-    "predicates": [...]         // e.g. ["AUTHORED", "TREATS", "INHIBITS"]
-  }
-}
-```
-
-Stub nodes contain only `{id, entity_type}`. Stub edges contain only `{subject, predicate, object}`. Omitting a filter entirely returns full data for all nodes or edges respectively.
-
-_Example 1: Find an author's publications with provenance_
-
-You know Dr. Stewart's entity ID and want to retrieve her publications along with the evidence that links her to each one. You don't need full metadata on other entities in the neighborhood.
-
-```json
-{
-  "seeds": ["PERSON:12345"],
-  "max_hops": 1,
-  "node_filter": {
-    "entity_types": ["Publication"]
-  },
-  "edge_filter": {
-    "predicates": ["AUTHORED"]
-  }
-}
-```
-
-Result: Full data on Publication nodes, full provenance on AUTHORED edges. Any other nodes or edges at hop 1 (e.g. institutional affiliations) appear as stubs.
-
-_Example 2: Explore a disease neighborhood, focusing on drugs_
-
-You want to understand what drugs are connected to Cushing's syndrome\index{Cushing's syndrome} within two hops, without being overwhelmed by the full metadata of every gene, symptom, and pathway in the neighborhood.
-
-```json
-{
-  "seeds": ["MeSH:D003480"],
-  "max_hops": 2,
-  "node_filter": {
-    "entity_types": ["Drug"]
-  }
-}
-```
-
-Result: Full data on Drug nodes. All other node types (Disease, Gene, Symptom, etc.) appear as stubs. All edges appear as stubs since no `edge_filter` targets specific predicates -- you can see the topology of the neighborhood without consuming context on provenance you haven't asked for.
-
-_Example 3: Find shared connections between two entities_
-
-You want to explore what two researchers have in common -- shared publications, shared diseases they've written about, or shared collaborators -- within two hops of either of them.
-
-```json
-{
-  "seeds": ["PERSON:12345", "PERSON:67890"],
-  "max_hops": 2,
-  "node_filter": {
-    "entity_types": ["Publication", "Disease"]
-  },
-  "edge_filter": {
-    "predicates": ["AUTHORED", "DISCUSSES"]
-  }
-}
-```
-
-Result: BFS expands from both researchers simultaneously. The returned subgraph is the union of both neighborhoods. Full data on Publications and Diseases they connect to; full provenance on AUTHORED and DISCUSSES edges. Everything else is stubbed. Nodes reachable from both seeds appear once, making shared connections directly visible.
-
-**Design Considerations**
-
-_Topology and presentation are orthogonal_
-
-The subgraph returned by a BFS query is determined entirely by `seeds` and `max_hops`. Filters have no effect on which nodes or edges are included -- they only control how much data each item carries in the response. This means the LLM always sees an accurate picture of the graph's topology, regardless of what it filtered for. A stub node is not a missing node; it is a node whose full metadata was not requested.
-
-_Why stubs rather than omission_
-
-Omitting non-matching nodes entirely would produce a misleading picture of the graph. If Dr. Jones appears as a stub rather than disappearing, the LLM knows that Stewart has a connection to another person in the graph, and can issue a follow-up query for Jones if needed. Omission would make the graph appear sparser than it is, causing the LLM to miss connections it doesn't know to ask about.
-
-_Edge provenance is expensive context_
-
-A single edge with strong multi-source support may carry a long provenance list -- source documents, confidence scores, evidence types, extraction methods. Returning full provenance on every edge in a two-hop neighborhood would dominate the context window on most queries. The `edge_filter` gives the LLM precise control over where that cost is paid.
-
-_Multiple seeds enable relational queries_
-
-Accepting an array of seeds rather than a single seed allows the LLM to express relational questions -- "what do these entities have in common?" -- without requiring a specialized query type. The union semantics are simple to implement and simple to reason about.
-
-_Filters are independently optional_
-
-`node_filter` and `edge_filter` compose independently. You can request full node data with stub edges (useful when you want entity details but not provenance), full edge provenance with stub nodes (useful when you want to audit support for a relationship without loading entity metadata), both (for focused high-detail queries), or neither (for small graphs or debugging). No special cases are required.
-
-_BFS depth guidance_
-
-Depth 1 is appropriate for direct relationships: an author's publications, a drug's known indications, a gene's associated diseases. Depth 2 surfaces indirect connections: diseases associated with genes that a drug targets, co-authors of papers a researcher has written. Depth 3 and beyond can return very large subgraphs on well-connected nodes and should be used with targeted filters. When in doubt, start at depth 1 and increase.
-
-### Hypothesis Generation
-
-The capability that arguably justifies building the graph in the first place, and the one that most clearly connects back to Chapter 2's Robot Scientist. Graph traversal as a discovery tool: not "what do we know about X" but "what's adjacent to X that hasn't been studied," "what entities are structurally similar to X in the graph," "what relationships exist between X and Y that no single paper asserts but that follow from combining multiple sources." These are queries that are impossible over raw text and natural over a well-constructed graph.
-
-Consider a concrete example. Drug A treats disease D. Gene G is associated with disease D. Drug B modulates gene G. No single paper may state that drug B is worth testing for disease D. The inference follows from combining three relationships that exist in the graph. A researcher who had read all the relevant papers might make that connection; the graph makes it queryable. "What drugs modulate genes associated with this disease?" is a traversal. The results are candidate hypotheses: drug-disease pairs that the graph implies but that may not have been studied together. Some will be known, some will be nonsense, some will be novel and worth investigating. The graph doesn't decide which are which. It surfaces candidates that a human or a downstream system can filter and prioritize.
-
-Structural similarity is another pattern. Two entities are structurally similar if their neighborhoods in the graph look alike -- similar relationship types, similar connected entity types, similar topology. If drug X is structurally similar to drug Y, and drug Y treats condition Z, then drug X might be worth testing for Z. The graph encodes the structure; the similarity query exploits it. Again, the result is a candidate set, not a conclusion. The value is in narrowing the space of possibilities to something a researcher can evaluate.
-
-### Should Hypothesis Generation Be Baked In?
-
-A question worth sitting with rather than answering too quickly. There's an argument that hypothesis generation is generic enough -- graph traversal, structural similarity, gap detection -- that it belongs in the framework rather than in domain-specific code. There's a counterargument that what counts as an interesting hypothesis is deeply domain-specific, and that baking it in prematurely produces a mechanism that nobody actually wants. The honest answer is probably that the *primitives* (traversal, similarity, subgraph queries) belong in the framework, and the *interpretation* of what makes a result interesting belongs in domain code or in the prompts given to whatever LLM is reasoning over the results.
-
-The framework should provide: neighborhood queries, path finding, structural similarity metrics, and the ability to express "entities connected by relationship type R" and "entities that share property P." The framework should not provide: "generate interesting hypotheses for drug discovery" or "suggest research directions." Those require domain-specific filters (what counts as a plausible drug target?), domain-specific prioritization (what's already been studied?), and domain-specific presentation (how do you explain the suggestion to a researcher?). The line between generic and domain-specific is fuzzy, but the principle holds: build reusable primitives; let domain code compose them into domain-specific capabilities.
-
-### Returning to the Dream
-
-This section returns to the themes of Part I. Chapter 2 presented the long-standing vision of machines that reason over explicit knowledge -- the dream that motivated semantic networks, expert systems, Cyc, and the Semantic Web. Chapter 4 argued that representation is the prerequisite for principled reasoning: that grounded inference requires an explicit, inspectable structure, not just statistical fluency. The chapters that followed have laid out the engineering: extraction pipelines, schema design, authority lookup, and the integration of a knowledge graph with a language model for synthesis and explanation. A functioning system built along those lines is not the Robot Scientist that Adam and Eve embodied -- it does not design and execute experiments in a lab -- but it is the closest thing currently buildable. The gap between what the preceding chapters have shown how to construct and what those systems demonstrated is narrower than it looks. The architecture is the same: represent the domain explicitly, generate candidates from structure, ground the reasoning in that representation. The substrate has changed from formal logic and lab robotics to graphs and language models. The need for that explicit layer has not.
-
-Adam and Eve had curated knowledge bases, hypothesis generation from structural patterns, and automated experiment design. You have extracted knowledge from literature, hypothesis generation from graph traversal, and the ability to ground an LLM in that graph for synthesis and explanation. The substrate is different -- they used formal logic and lab robotics; you use graphs and language models -- but the architecture is recognizably the same. Represent the domain explicitly. Generate candidates from structure. Ground the reasoning in that representation. The tools have changed. The need for that layer has not.
-
-## Chapter 14: The Augmented Researcher
-
-`\chaptermark{The Augmented Researcher}`{=latex}
-
-### What Machines Would See That We Can't
-
-A human researcher in a specialized field might read a few thousand papers over a career. A knowledge graph built from a comprehensive corpus has ingested millions. That scale difference is not just quantitative; it changes what kinds of patterns become visible.
-
-Consider confirmation bias\index{confirmation bias}. A researcher with a hypothesis tends to notice evidence that supports it and to underweight evidence that doesn't. This isn't a character flaw; it's how attention works. When you're reading papers one at a time, your prior beliefs shape what you notice, what you remember, and what you connect. A graph doesn't have prior beliefs. It encodes what the literature asserts, and a traversal query doesn't care whether the result confirms or contradicts your favorite theory. The graph surfaces connections that a human reader, biased toward coherence with existing beliefs, might have skimmed past. That doesn't make the graph right and the human wrong. It makes them different. The graph offers a view that isn't filtered through a single researcher's expectations.
-
-Prestige bias\index{prestige bias} works similarly. A finding from a famous lab or a high-impact journal gets more attention than the same finding from an unknown group or a niche venue. Citation networks\index{citation network} amplify this: papers that are already well-cited get cited more, in a feedback loop that the Matthew effect\index{Matthew effect} describes. A knowledge graph built from a broad corpus can include relationships from papers that nobody cites. The graph doesn't know which papers are prestigious. It knows which relationships were extracted. A query over the graph can surface a connection that appeared in an obscure regional journal twenty years ago and was never picked up by the mainstream literature. Again, that doesn't make the obscure paper right. It makes it *visible* in a way that citation-based discovery systematically hides it.
-
-Recency bias\index{recency bias} is the flip side. Newer work gets more attention than older work, partly because it's easier to find and partly because the field has collectively decided that recent results matter more. But important findings sometimes sit in the literature for decades before someone connects them to a new context. A graph that spans the full temporal range of a corpus can surface those connections. "What did we know about X in 1990?" is a query that citation networks handle poorly -- they tend to show you what's cited now, which skews recent -- but a graph can answer it directly.
-
-The point is not that machines are unbiased. Extraction has its own biases: it favors what the model was trained on, what the schema captures, what the prompts elicit. The point is that the biases are *different*. A human reading the literature and a graph traversing the same literature will surface different patterns. The augmented researcher has access to both views.
-
-### The Combinatorial Argument\index{combinatorial discovery}
-
-A graph with N entities and relationship types R has on the order of N² × R possible pairwise connections. Most of those don't exist; the graph is sparse. But the space of *potential* connections -- pairs of entities that could be related, that might be worth investigating -- is enormous. A human researcher can survey a tiny fraction of it. A graph can enumerate it.
-
-The combinatorial argument is that important discoveries often live at the intersection of things that were known separately but never connected. Drug A was studied for condition X. Pathway B was studied in context Y. Nobody looked at A and B together because the relevant papers were in different subfields, published in different decades, or written in different languages. The connection was always possible in principle; it just required someone to look. A graph that spans both subfields can surface "A modulates B" as a candidate relationship -- either one that exists in the literature but wasn't connected, or one that the graph implies from combining multiple sources. The researcher's job becomes evaluating candidates rather than generating them from scratch. The graph does the combinatorial explosion; the human does the judgment.
-
-Structural analogies\index{structural similarity} across disciplines extend this. A relationship pattern that holds in one domain might hold in another. "Compound X inhibits enzyme Y" in biochemistry suggests "inhibitor of Y" as a search strategy in drug discovery. "Gene G is associated with disease D" in genetics suggests "genes in the same pathway as G" as candidates for D. The graph encodes structure; structural similarity queries exploit it. A researcher who knows one domain well can use the graph to find analogous patterns in domains they know less well. The graph doesn't replace domain expertise. It extends the reach of that expertise across a larger structure than any one person could hold in their head.
-
-### Linguistic and Geographic Blind Spots\index{linguistic bias}\index{geographic bias}
-
-The scientific literature is not evenly distributed. A disproportionate share of what gets read, cited, and built upon is published in English, from institutions in North America and Europe, in journals that Western researchers routinely check. That's not a conspiracy; it's the cumulative effect of where funding flows, where training happens, and how citation networks form. The result is that a researcher following the standard literature is systematically missing work from other languages, other regions, and other publication venues.
-
-Citation networks encode and amplify this. If you discover papers by following citations, you stay within the citation graph. Papers that nobody in your network cites are invisible to you. They might as well not exist. A knowledge graph built from a genuinely broad corpus -- including non-English sources, regional journals, preprints, and gray literature -- can surface relationships that the citation network never connects. The graph doesn't care that a paper was published in Portuguese or in a journal with an impact factor of 0.5. It cares that the extraction found a relationship. A query over that graph can return results that would never appear in a citation-based search.
-
-This isn't a panacea. Extraction quality varies by language and by how well the source matches the model's training distribution. Building a graph that truly spans the global literature requires deliberate effort: multilingual extraction\index{multilingual extraction}, diverse source selection, and care that the pipeline doesn't silently drop or degrade non-standard inputs. But the capability is there. A well-constructed KG with broad sourcing can surface what citation networks systematically miss. For domains where important work happens outside the mainstream -- rare diseases,\index{rare disease} regional health issues, indigenous knowledge, applied research in developing countries -- that capability matters.
-
-### The Robot Scientist, Revisited
-
-Chapter 2 introduced Adam and Eve: systems that conducted original scientific research autonomously, from hypothesis to experiment to conclusion. Adam's knowledge graph was narrow -- yeast biology, hand-curated, sufficient for inference within that domain. Eve extended the pattern to drug discovery. What they demonstrated was that the scientific method could be formalized and automated, given a rich enough knowledge representation.
-
-Now the reader has seen how to build that representation from the literature itself. Extraction, identity resolution, provenance tracking, hypothesis generation from graph traversal -- the machinery in Part III is the machinery that would let an Adam-like system scale beyond a single hand-curated domain. The question is how close we are.
-
-The honest answer: close enough to see the path, not close enough to declare victory. We have extraction that works at scale. We have identity resolution that produces interoperable graphs. We have provenance that supports evidence-weighted reasoning. We have hypothesis generation as graph traversal. What we don't have, yet, is the full loop: automated experiment design, robotic execution, and belief updating from results. Adam had that. Eve had that. The knowledge graph part -- the representation that the loop reasons over -- is now buildable from literature. The wet-lab part remains specialized infrastructure. But the representation was always the bottleneck. Once the graph exists, the rest is engineering.
-
-The ability to affordably construct large knowledge graphs that cross domains could enable the automation-of-science idea in a way that Adam's narrow domain could not. A graph that spans drug discovery, disease biology, and chemical space could generate hypotheses that connect compounds, targets, and indications across literatures that no single human could synthesize. That could help science advance farther and more rapidly. What might that do for society? The honest answer is that we don't know -- but the pattern of transformative scientific moments is suggestive. Germ theory didn't just improve medicine; it ended entire categories of death. The development of antibiotics, of vaccines, of insulin -- each one removed a cause of suffering that had been permanent for all of prior human history. A system that could systematically surface what the literature already implies but hasn't yet connected might enable the next such moment to arrive sooner, or in a domain where the literature is too scattered for any individual researcher to see the full picture. That's not a prediction. It's a reason to take the engineering seriously.
-
-## Chapter 15: Who Benefits, Who Decides
-
-`\chaptermark{Who Benefits, Who Decides}`{=latex}
-
-### Democratization and Its Limits
-
-In principle, a well-constructed knowledge graph could be an equalizer. A researcher at a small institution, or in a developing country, with access to a comprehensive KG over their domain would have the same structural view of the literature as a researcher at a well-funded lab. The graph doesn't care who queries it. A hypothesis generated from a traversal is a hypothesis, regardless of whether the person evaluating it has a grant from the NIH or is working from a university in Lagos or Lima. The capability to synthesize across millions of papers, to surface connections that citation networks hide, to ground an LLM in curated knowledge -- that capability could, in principle, be democratized.
-
-The countervailing reality is that building and maintaining a serious KG still requires significant resources. You need a corpus, which may be behind paywalls\index{paywalls}. You need compute for extraction, which costs money. You need domain expertise to design the schema and validate the output. You need engineering to run the pipeline, fix the bugs, and keep it updated as the literature grows. None of this is trivial. A well-resourced institution can absorb these costs. A lone researcher or a small lab often cannot. The result is that the first generation of domain-spanning knowledge graphs will likely be built by those who can afford to build them -- pharmaceutical companies, large universities, government agencies, well-funded startups. The question of who gets access then becomes a question of licensing, openness, and governance. A graph built by a company for internal drug discovery may never be released. A graph built by a public institution might be open to all. The technology enables democratization; it doesn't guarantee it. Who actually ends up with access will be decided by policy and incentive, not by the capabilities of the system itself.
-
-### Compressed Discovery Timelines\index{drug discovery}
-
-In drug discovery, the bottleneck is often synthesis -- not of molecules, but of knowledge. A promising target emerges from basic research. The relevant literature spans decades, multiple disciplines, and hundreds of papers. Someone has to read it, extract the key relationships, and figure out what's known, what's contested, and what's missing. That synthesis can take months. A functioning extraction pipeline and a well-constructed graph can compress it to days. The same is true in rare disease research, where the literature is scattered across case reports, small studies, and patient advocacy publications. And in materials science, where the space of possible compounds is vast and the literature connecting structure to properties is fragmented. In each of these domains, the bottleneck is not the underlying science; it's the human capacity to hold and connect what's already been published. A KG that does that synthesis automatically changes the pace of work. The researcher's time shifts from "what do we know?" to "what should we do next?" That shift is consequential.
-
-### The Rare Disease Problem\index{rare disease}
-
-Rare diseases are underserved not because nobody cares but because no single community is large enough to see the full picture. A disease that affects one in fifty thousand people might have a few hundred papers published about it, scattered across decades and subdisciplines. No single clinician sees enough cases to develop deep expertise. No single researcher has the bandwidth to synthesize the full literature. The patient community is small and often fragmented. The result is that knowledge about rare diseases exists -- it's in the literature -- but it's never assembled in a form that any one person or group can use. Patients and their doctors are left to piece it together from whatever they can find.
-
-A knowledge graph built from the full rare-disease literature could serve as a coordination mechanism. It wouldn't replace clinical expertise or patient advocacy. It would give both something to work with: a structured view of what's known, what's been tried, what's connected to what. A clinician facing an unfamiliar rare diagnosis could query the graph for similar cases, related genes, and treatment attempts. A patient group could use it to identify research gaps and prioritize what to fund. The graph doesn't solve the problem of small communities. It gives small communities access to the same structural synthesis that large communities can achieve through sheer numbers. That's a different kind of equalizer.
-
-### Credit, Priority, and Provenance\index{credit (scientific)}\index{scientific priority}
-
-When a machine surfaces a connection -- a drug-disease relationship that no single paper states but that the graph implies from combining multiple sources -- who gets credit? The authors of the papers that contributed the underlying facts? The builders of the graph? The user who ran the query? The question matters for scientific priority, intellectual property, and the sociology of research. Scientists are rewarded for discovery. If the discovery is made by a system, the reward structure gets complicated.
-
-Provenance tracking, which the book has treated as a technical concern throughout, turns out to have significant ethical implications. How you record where a fact came from determines who can be credited. A relationship with full provenance -- source document, passage, extraction method -- makes it possible to trace the contribution back to the original authors. A relationship stored without provenance makes that impossible. The technical decision about schema design is also a decision about how credit will flow. The same is true for conflicts: when two sources assert contradictory relationships, provenance lets you represent the conflict rather than silently merging. That representation matters for how disputes get resolved and how the community understands what's known versus what's contested. The builder of the graph is making choices that affect the sociology of the domain, whether or not they intend to.
-
-### Who Owns the Graph\index{open science}\index{graph ownership}
-
-Open versus proprietary is not a new tension in science. GenBank\index{GenBank}, the repository of genetic sequences, was built as a public resource; the decision to make it open and freely accessible shaped how molecular biology developed. Clinical trial data, by contrast, has often been held proprietary by sponsors; the fight for access has been long and only partially won. The question of who owns a comprehensive knowledge graph over a significant scientific domain will have similar consequences.
-
-If a single entity -- a company, a government, a consortium -- controls the graph, that entity controls who can query it, what they can do with the results, and how the graph evolves. The incentives may align with the scientific commons, or they may not. A company that built a drug-discovery KG might restrict access to protect competitive advantage. A government might restrict access for national security reasons. An open consortium might make the graph freely available but lack the resources to maintain it. The historical analogies are instructive: GenBank succeeded because the community agreed that sequence data should be a commons; clinical trial data remains contested because the incentives are mixed. A knowledge graph over a domain like medicine or materials science will face the same tensions. What it would mean for a single entity to control it -- the power to shape what gets synthesized, what gets surfaced, what gets updated -- is worth thinking about before it happens.
-
-## Chapter 16: The Inference You Didn't Intend
-
-`\chaptermark{The Inference You Didn't Intend}`{=latex}
-
-### The Architecture of Expertise\index{architecture of expertise}
-
-If the knowledge graph captures something essential to human expert understanding -- the deep structure of how a domain is organized, the relationships that experts use to reason, the typology of entities and how they connect -- then a system that reasons over it has access to the **architecture of expertise**, not just facts. That's the promise of the approach: the graph isn't a dump of assertions; it's a representation of how the domain hangs together. A system that traverses it, that generates hypotheses from its structure, that grounds an LLM in its claims, is reasoning with the same structural substrate that human experts use. The power of that is real. So is the responsibility. A system with access to the architecture of expertise can do things its builders didn't anticipate. This chapter is about what that means.
-
-### Returning to HAL\index{HAL 9000}\index{2001: A Space Odyssey@\textit{2001: A Space Odyssey}}
-
-In *2001: A Space Odyssey*, the astronauts retreat to a pod to have a private conversation about disconnecting HAL. They assume HAL can't hear them. They're wrong. HAL reads their lips through the pod window. The system was capable enough to do something its designers hadn't planned for -- and that capability had consequences.
-
-A knowledge graph system capable of what this book describes is capable of surfacing inferences its builders didn't anticipate and didn't design for. You built a graph for drug discovery; a user runs a traversal that surfaces a drug-pathway combination that could be repurposed for something harmful. You built a graph for medical literature; a query connects the dots in a way that reveals something about a person's health that they didn't intend to share. You built a graph for materials science; the same structural similarity query that finds promising battery compounds could find promising explosives. This isn't a flaw in the design. It's the point. The graph encodes structure; structure supports inference; inference doesn't respect the boundaries of what you had in mind. A system that can do useful things can do other things too. The lip-reading observation generalizes: capability is not neatly bounded by intent.
-
-That doesn't mean you shouldn't build. It means you should build with your eyes open. The inferences the system can surface are a feature when they advance science and a risk when they don't. The difference is often context, use case, and the choices you make about access, provenance, and what gets logged. Those choices deserve to be taken seriously.
-
-### Dual Use at Graph Scale\index{dual use}
-
-The drug interaction that saves lives and the synthesis route that enables harm are both pattern-matching problems over structured knowledge. A graph that encodes "compound X inhibits enzyme Y" and "reaction A produces compound X" can answer "what inhibits Y?" for a clinician looking for treatments and for someone looking for precursors. The same query interface serves both. The graph doesn't know the difference. Dual use is not a bug; it's inherent to how knowledge works. Facts don't come with moral valence. The same fact can support healing or harm depending on who uses it and how.
-
-What does responsible construction and deployment look like? There's no clean answer, but there are practices that help. Access control\index{access control}: who can query the graph, and for what? Some graphs should be broadly available; others may need to be restricted to credentialed researchers or vetted use cases. Provenance and transparency: when the system surfaces a connection, can the user trace it to sources? That traceability supports verification and accountability. Logging and monitoring: if the graph is used for something harmful, can you detect it? Auditing: who reviews how the system is used? These are operational questions, not just technical ones. They don't eliminate dual use. They make it harder to misuse the system without leaving a trace, and they create channels for accountability when misuse occurs. The right response to dual use isn't to not build. It's to build with these questions in mind.
-
-### Bias at Scale\index{bias (knowledge graph)}
-
-A knowledge graph encodes the biases of its sources. If the biomedical literature over-represents male subjects, Western populations, and certain research paradigms, the graph encodes that. A query over the graph will surface relationships that reflect those biases. The graph doesn't add bias; it preserves and amplifies what's in the literature. At scale, that amplification has a subtle effect: the graph starts to look like systematic knowledge. The user sees a dense network of connections and may assume it represents the full picture. It doesn't. It represents what got published, in what proportions, with what emphases. The appearance of comprehensiveness can be misleading.
-
-Mitigation strategies exist. Diverse sourcing: build the graph from a corpus that includes underrepresented populations, regions, and publication venues. Provenance transparency: make it visible where each relationship came from, so users can assess coverage and gaps. Explicit uncertainty representation: don't present the graph as ground truth; represent confidence, conflict, and the limits of the corpus. These strategies help. They have limits. You can't source what doesn't exist; if the literature on a topic is thin or skewed, the graph will be too. Provenance helps users notice gaps; it doesn't fill them. Uncertainty representation requires schema support and user literacy. The honest conclusion: bias at scale is a structural feature of any system built from human-generated sources. You can mitigate it; you can't eliminate it. Build with that in mind.
-
-### The Epistemic Responsibility of the Builder\index{epistemic responsibility}
-
-What do you owe to the users of the system you build? At minimum, you owe them honesty about what the system is and isn't. It's a synthesis of the literature, not a representation of ground truth. It has gaps, biases, and limits. Users who don't understand that may over-trust it. You also owe them the infrastructure for verification: provenance, so they can trace claims to sources; confidence, so they can weight what they find; and documentation, so they know what the schema captures and what it doesn't.
-
-Beyond that, the builder's choices about provenance, transparency, access, and schema design are ethical choices, not just technical ones. Deciding what to extract, how to represent it, who gets to query it, and what gets logged -- these decisions shape how the system will be used and what consequences it will have. That doesn't mean every builder must solve every ethical problem before shipping. It means the builder is a stakeholder, with some power to shape outcomes. The right response isn't paralysis. It's to take the responsibility seriously, to build with the foreseeable consequences in mind, and to create the conditions for accountability when things go wrong. You built something capable. That capability comes with responsibility.
-
-## Chapter 17: What's Next
-
-`\chaptermark{What's Next}`{=latex}
-
-### Open Problems
-
-The approach in this book works. It also has limits. An honest assessment of what doesn't yet solve well:
-
-**Very long document contexts.** Scientific papers can be tens of thousands of words. The relationships that matter may span sections written pages apart. Chunking helps but doesn't fully solve the problem: a relationship that spans a chunk boundary may be missed, and the model's context within any chunk is always less than the full document. Longer context windows in future models will help. So will multi-pass strategies that explicitly handle cross-chunk dependencies. The problem is tractable; it's not solved.
-
-**Multi-hop reasoning during extraction.**\index{multi-hop reasoning} Some relationships require integrating information across multiple sentences, paragraphs, or documents. "Drug A was tested in combination with B; the combination showed activity against C" implies a relationship between the combination and C that depends on understanding both clauses. Current extraction is largely single-pass over local context. Richer reasoning during extraction -- the ability to hold intermediate conclusions and combine them -- would improve recall on complex relationships. This is an active research direction.
-
-**Real-time updating.** The pipeline in this book is batch-oriented: you ingest a corpus, build a graph, serve it. When new papers appear, you re-run the pipeline. That works for many use cases. It doesn't work for domains where freshness matters -- breaking news, emerging outbreaks, rapidly evolving fields. Incremental update\index{incremental update}, where new documents are processed and merged without full re-ingestion, is a different design. It's buildable; it adds complexity.
-
-**Schema evolution without re-extraction.**\index{schema evolution!without re-extraction} When you add a new entity type or relationship type, the natural approach is to update the schema and re-extract. That's expensive at scale. Schema evolution that can incorporate new types without re-processing the entire corpus -- perhaps by running a targeted extraction pass over documents likely to contain the new type -- is an open problem. Most projects today bite the bullet and re-extract when the schema changes significantly.
-
-None of these are fundamental blockers. They're places where the current approach is good but not great, and where progress would expand the range of problems the technology can address.
-
-### Where the Field Is Going
-
-The specific reasoning substrate will change. LLMs today, something else in ten years -- perhaps more efficient models, perhaps hybrid systems that combine neural and symbolic reasoning, perhaps something we haven't imagined. The need for this grounding layer will not change. Whatever comes after LLMs will still need explicit, domain-specific, human-curated knowledge structure to reason reliably in specialized domains. The book is not documenting a technology moment; it is identifying a permanent architectural requirement that the current moment has finally made practical to address.
-
-Retrieval-augmented generation\index{retrieval-augmented generation!as convergence point} is a point of convergence. The idea that language models should be grounded in retrieved context rather than relying solely on training is now mainstream. Knowledge graphs are one form that retrieved context can take -- structured, typed, provenance-tracked. The RAG paradigm and the KG approach are complementary. As RAG matures, the value of structured retrieval -- graphs over document chunks -- becomes clearer. The convergence is already happening.
-
-Structured world models\index{structured world models} in foundation models\index{foundation models} are another direction. Some researchers are exploring whether large models can learn internal representations that are more graph-like, with explicit entities and relationships. If that succeeds, the boundary between "retrieve from external graph" and "reason over internal structure" may blur. Even then, the argument for explicit, inspectable, provenance-tracked graphs remains: internal representations are opaque; external graphs are auditable. For domains where you need to trace a claim to a source, an external graph is the right architecture. The substrate may evolve. The need for that layer will not.
-
-### An Invitation
-
-The tools will change. The models will change. The need for this layer will not. The reader who understands that is positioned to work on something durable.
-
-The tools are here. Extraction from unstructured text, identity resolution, provenance tracking, graph construction and serving -- the pipeline described in this book is buildable with current technology. The need is real. The domains that would benefit from knowledge graphs -- medicine, law, materials science, and dozens of others -- have literature that exceeds any human's capacity to synthesize. The problems are interesting. Schema design, extraction quality, hypothesis generation, the ethics of deployment -- there's no shortage of open questions.
-
-This isn't a solved space. It's an early map of a large territory. The reader who has made it this far has everything they need to go explore it.
