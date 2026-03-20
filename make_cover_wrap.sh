@@ -32,7 +32,7 @@ WHITE="#ffffff"
 FONT="DejaVu-Sans-Bold"
 
 # --- Back cover ---
-BACK_FONT_SIZE=72
+BACK_FONT_SIZE=36
 BACK_MARGIN=150
 BACK_TEXT_W=$(( COVER_W - BACK_MARGIN * 2 ))
 BACK_Y=$(( HEIGHT * 2 / 5 ))   # slightly above center
