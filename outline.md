@@ -26,7 +26,7 @@ A simple knowledge graph: nodes represent entities, edges represent typed relati
 
 This book builds its argument around a concrete project: a knowledge graph for medical literature, available at https://github.com/wware/kgraph. The project is the worked example throughout the book -- when the engineering chapters describe extraction pipelines, identity servers, and graph serving, that is the code they are describing.
 
-The project has four components: `kgraph`, the domain-agnostic core for building, bundling, and managing a knowledge graph; `kgserver`, which accepts a bundle and exposes it as an MCP server\index{model context protocol}, a graph visualization, a chatbot, and a set of API endpoints; `kgschema`, a domain-agnostic schema layer designed to be extended for specific domains; and `examples/medlit`, the medical literature implementation with its parsing, extraction, and identity resolution against biomedical ontologies.
+The project has four components: `kgraph`, the domain-agnostic core for building, bundling, and managing a knowledge graph; `kgserver`, which accepts a bundle and exposes it as a graph visualization, a chatbot, and a set of REST/GraphQL API endpoints; `kgschema`, a domain-agnostic schema layer designed to be extended for specific domains; and `examples/medlit`, the medical literature implementation with its parsing, extraction, and identity resolution against biomedical ontologies. MCP serving\index{model context protocol} is handled by `bfs-ql`, a companion library that wraps any graph backend and exposes it as four MCP tools an LLM can use to traverse and reason over the graph.
 
 The gist of this book (beyond providing a lot of how-to information) is that a knowledge graph in some form is
 
@@ -941,7 +941,7 @@ The value of the graph is in what grounded reasoning becomes possible, not in th
 
 ### The Server Is Not the Point
 
-This chapter is about what becomes possible once your graph exists, not about how to build a particular server. The medlit project has a serving layer -- kgserver -- with REST, GraphQL, MCP, and persistent storage backends. You might build something like it, or you might expose your graph through a completely different interface, or you might not serve it externally at all. The infrastructure choices are yours. What this chapter is really about is the capability space: what can a well-constructed knowledge graph actually do for someone?
+This chapter is about what becomes possible once your graph exists, not about how to build a particular server. The medlit project has a serving layer -- kgserver for REST, GraphQL, visualization, and chatbot, and bfs-ql for MCP. You might build something like it, or you might expose your graph through a completely different interface, or you might not serve it externally at all. The infrastructure choices are yours. What this chapter is really about is the capability space: what can a well-constructed knowledge graph actually do for someone?
 
 That distinction matters because it's easy to conflate "I have a graph" with "I have a graph server." The graph is the data structure and the relationships it encodes. The server is one way to expose it. You could serve the same graph through a REST API, a GraphQL endpoint, an MCP server, a SPARQL endpoint, a custom query language, or no server at all -- just load it into memory and run Python scripts against it. The capabilities we're about to describe -- direct querying, visualization, grounding LLMs, hypothesis generation -- are capabilities of the graph. The server is a delivery mechanism. Choose one that fits your users and your deployment constraints; don't let the choice of server obscure what the graph itself enables.
 
@@ -1162,14 +1162,11 @@ Stub items carry only enough information to understand the graph's topology with
 
 ```json
 {
-  "seeds": ["<entity_id>", ...],
-  "max_hops": <int>,
-  "node_filter": {
-    "entity_types": ["<type>", ...]
-  },
-  "edge_filter": {
-    "predicates": ["<predicate>", ...]
-  }
+  "seeds":         ["<entity_id>", ...],
+  "max_hops":      <int>,
+  "node_types":    ["<type>", ...],
+  "predicates":    ["<predicate>", ...],
+  "topology_only": <bool>
 }
 ```
 
@@ -1177,14 +1174,14 @@ Stub items carry only enough information to understand the graph's topology with
 |---|---|---|
 | `seeds` | Yes | Array of one or more canonical entity IDs to use as BFS starting points. All seeds are expanded simultaneously; the result is the union of their neighborhoods. |
 | `max_hops` | Yes | Maximum graph distance from any seed node. Values of 1–3 are typical; larger values may return very large subgraphs. |
-| `node_filter` | No | Controls which nodes receive full metadata. Nodes not matching the filter appear as stubs. Omit to receive full data on all nodes. |
-| `node_filter.entity_types` | No | List of entity type names. A node matches if its type is in this list. |
-| `edge_filter` | No | Controls which edges receive full metadata including provenance. Edges not matching appear as stubs. Omit to receive full data on all edges. |
-| `edge_filter.predicates` | No | List of predicate names. An edge matches if its predicate is in this list. |
+| `node_types` | No | List of entity type names. Matching nodes receive full metadata; non-matching nodes appear as stubs. Omit to receive full data on all nodes. |
+| `predicates` | No | List of predicate names. Matching edges receive full metadata including provenance; non-matching edges appear as stubs. Omit to receive full data on all edges. |
+| `topology_only` | No | Boolean (default false). When true, suppresses all metadata: every node is returned as a bare `{id, entity_type}` stub and every edge as a bare `{subject, predicate, object}` triple. Overrides `node_types` and `predicates`. Use this as the first query on a large or unfamiliar graph to survey structure cheaply before requesting metadata. |
 
-- If `node_filter` is omitted entirely, all nodes in the subgraph receive full data.
-- If `edge_filter` is omitted entirely, all edges receive full data including provenance.
-- Omitting both filters is appropriate for small subgraphs or debugging, but will produce large responses on dense neighborhoods.
+- If `node_types` is omitted entirely, all nodes in the subgraph receive full data.
+- If `predicates` is omitted entirely, all edges receive full data including provenance.
+- Omitting both is appropriate for small subgraphs or debugging, but will produce large responses on dense neighborhoods.
+- `topology_only=true` is the recommended first move on a large or unfamiliar graph: returns the complete structural skeleton at minimum token cost.
 - Multiple seeds are useful when you want to explore the shared neighborhood of several entities simultaneously -- for example, finding publications co-authored by two researchers, or finding diseases connected to a set of genes.
 - If you do not yet have a canonical entity ID, call `search_entities()` first to resolve a name to an ID.
 
@@ -1216,7 +1213,7 @@ Stub items carry only enough information to understand the graph's topology with
 
 _Full Node_
 
-A node that matches the `node_filter` (or when no filter is specified) includes all available metadata:
+A node whose `entity_type` matches `node_types` (or when no filter is specified) includes all available metadata:
 
 ```json
 {
@@ -1233,7 +1230,7 @@ A node that matches the `node_filter` (or when no filter is specified) includes 
 
 _Stub Node_
 
-A node that does not match the `node_filter` appears as a stub with only identity information:
+A node that does not match `node_types` appears as a stub with only identity information:
 
 ```json
 {
@@ -1244,7 +1241,7 @@ A node that does not match the `node_filter` appears as a stub with only identit
 
 _Full Edge_
 
-An edge that matches the `edge_filter` (or when no filter is specified) includes all provenance and metadata:
+An edge whose `predicate` matches `predicates` (or when no filter is specified) includes all provenance and metadata:
 
 ```json
 {
@@ -1265,7 +1262,7 @@ An edge that matches the `edge_filter` (or when no filter is specified) includes
 
 _Stub Edge_
 
-An edge that does not match the `edge_filter` appears with topology only:
+An edge that does not match `predicates` appears with topology only:
 
 ```json
 {
@@ -1289,18 +1286,15 @@ _Query structure_
 
 ```json
 {
-  "seeds": ["<id>", ...],       // one or more starting entity IDs
-  "max_hops": <int>,            // graph distance from seeds (1-3 recommended)
-  "node_filter": {              // optional: which nodes get full data
-    "entity_types": [...]       // e.g. ["Publication", "Disease", "Drug"]
-  },
-  "edge_filter": {              // optional: which edges get full data + provenance
-    "predicates": [...]         // e.g. ["AUTHORED", "TREATS", "INHIBITS"]
-  }
+  "seeds":         ["<id>", ...],  // one or more starting entity IDs
+  "max_hops":      <int>,          // graph distance from seeds (1-3 recommended)
+  "node_types":    [...],          // optional: entity types that get full data
+  "predicates":    [...],          // optional: predicates that get full data + provenance
+  "topology_only": <bool>          // optional: true = bare IDs/types only, no metadata
 }
 ```
 
-Stub nodes contain only `{id, entity_type}`. Stub edges contain only `{subject, predicate, object}`. Omitting a filter entirely returns full data for all nodes or edges respectively.
+Stub nodes contain only `{id, entity_type}`. Stub edges contain only `{subject, predicate, object}`. Omitting `node_types` or `predicates` returns full data for all nodes or edges respectively. Use `topology_only: true` as the first query on a large or unfamiliar graph to survey structure at minimum token cost.
 
 _Example 1: Find an author's publications with provenance_
 
@@ -1308,14 +1302,10 @@ You know Dr. Stewart's entity ID and want to retrieve her publications along wit
 
 ```json
 {
-  "seeds": ["PERSON:12345"],
-  "max_hops": 1,
-  "node_filter": {
-    "entity_types": ["Publication"]
-  },
-  "edge_filter": {
-    "predicates": ["AUTHORED"]
-  }
+  "seeds":      ["PERSON:12345"],
+  "max_hops":   1,
+  "node_types": ["Publication"],
+  "predicates": ["AUTHORED"]
 }
 ```
 
@@ -1327,15 +1317,13 @@ You want to understand what drugs are connected to Cushing's syndrome\index{Cush
 
 ```json
 {
-  "seeds": ["MeSH:D003480"],
-  "max_hops": 2,
-  "node_filter": {
-    "entity_types": ["Drug"]
-  }
+  "seeds":      ["MeSH:D003480"],
+  "max_hops":   2,
+  "node_types": ["Drug"]
 }
 ```
 
-Result: Full data on Drug nodes. All other node types (Disease, Gene, Symptom, etc.) appear as stubs. All edges appear as stubs since no `edge_filter` targets specific predicates -- you can see the topology of the neighborhood without consuming context on provenance you haven't asked for.
+Result: Full data on Drug nodes. All other node types (Disease, Gene, Symptom, etc.) appear as stubs. All edges appear as stubs since no `predicates` filter targets specific predicates -- you can see the topology of the neighborhood without consuming context on provenance you haven't asked for.
 
 _Example 3: Find shared connections between two entities_
 
@@ -1343,14 +1331,10 @@ You want to explore what two researchers have in common -- shared publications, 
 
 ```json
 {
-  "seeds": ["PERSON:12345", "PERSON:67890"],
-  "max_hops": 2,
-  "node_filter": {
-    "entity_types": ["Publication", "Disease"]
-  },
-  "edge_filter": {
-    "predicates": ["AUTHORED", "DISCUSSES"]
-  }
+  "seeds":      ["PERSON:12345", "PERSON:67890"],
+  "max_hops":   2,
+  "node_types": ["Publication", "Disease"],
+  "predicates": ["AUTHORED", "DISCUSSES"]
 }
 ```
 
@@ -1368,7 +1352,7 @@ Omitting non-matching nodes entirely would produce a misleading picture of the g
 
 _Edge provenance is expensive context_
 
-A single edge with strong multi-source support may carry a long provenance list -- source documents, confidence scores, evidence types, extraction methods. Returning full provenance on every edge in a two-hop neighborhood would dominate the context window on most queries. The `edge_filter` gives the LLM precise control over where that cost is paid.
+A single edge with strong multi-source support may carry a long provenance list -- source documents, confidence scores, evidence types, extraction methods. Returning full provenance on every edge in a two-hop neighborhood would dominate the context window on most queries. The `predicates` filter gives the LLM precise control over where that cost is paid.
 
 _Multiple seeds enable relational queries_
 
@@ -1376,7 +1360,7 @@ Accepting an array of seeds rather than a single seed allows the LLM to express 
 
 _Filters are independently optional_
 
-`node_filter` and `edge_filter` compose independently. You can request full node data with stub edges (useful when you want entity details but not provenance), full edge provenance with stub nodes (useful when you want to audit support for a relationship without loading entity metadata), both (for focused high-detail queries), or neither (for small graphs or debugging). No special cases are required.
+`node_types` and `predicates` compose independently. You can request full node data with stub edges (useful when you want entity details but not provenance), full edge provenance with stub nodes (useful when you want to audit support for a relationship without loading entity metadata), both (for focused high-detail queries), or neither (for small graphs or debugging). When neither filter is specified, `topology_only: true` is the most efficient option. No special cases are required.
 
 _BFS depth guidance_
 
