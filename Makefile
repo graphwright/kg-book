@@ -1,33 +1,33 @@
 SVG_PDFS := $(patsubst %.svg,%.pdf,$(wildcard *.svg))
 IMAGES := $(wildcard *.png *.jpg *.jpeg) $(SVG_PDFS)
 PANDOC := pandoc
-SRC := outline.md
+SRC := text.md
 
 # Lulu interior geometry: 6x9, inner margin slightly wider for binding
 GEOMETRY := paperwidth=6in,paperheight=9in,top=0.75in,bottom=0.75in,inner=0.875in,outer=0.625in
 
-all: outline.epub outline.pdf cover.pdf
+all: text.epub text.pdf cover.pdf
 
 clean:
-	rm -f outline.epub outline.pdf outline.tex outline.aux outline.idx outline.ind outline.ilg outline.log outline.out cover.pdf $(SVG_PDFS)
+	rm -f text.epub text.pdf text.tex text.aux text.idx text.ind text.ilg text.log text.out text.toc cover.pdf $(SVG_PDFS)
 
 # Convert SVG diagrams to PDF for xelatex (avoids shell-escape requirement)
 %.pdf: %.svg
 	inkscape --export-filename=$@ $<
 
 # epub still uses cover-image from YAML frontmatter
-outline.epub: $(SRC) $(IMAGES)
+text.epub: $(SRC) $(IMAGES)
 	$(PANDOC) $(SRC) -o $@
 
 # Interior PDF for Lulu — no cover, xelatex for font embedding
 # Two-step: pandoc → LaTeX, then xelatex + makeindex + xelatex (makeindex needs a separate pass)
-outline.pdf: outline.tex $(IMAGES)
-	xelatex -interaction=nonstopmode outline.tex || true
-	-makeindex -s index.ist outline
-	xelatex -interaction=nonstopmode outline.tex
-	xelatex -interaction=nonstopmode outline.tex
+text.pdf: text.tex $(IMAGES)
+	xelatex -interaction=nonstopmode text.tex || true
+	-makeindex -s index.ist text
+	xelatex -interaction=nonstopmode text.tex
+	xelatex -interaction=nonstopmode text.tex
 
-outline.tex: $(SRC) index-header.tex index-footer.tex
+text.tex: $(SRC) index-header.tex index-footer.tex
 	$(PANDOC) $(SRC) \
 	  -f markdown+raw_tex \
 	  --top-level-division=part \
@@ -41,7 +41,7 @@ outline.tex: $(SRC) index-header.tex index-footer.tex
 	  --citeproc \
 	  --bibliography=references.bib \
 	  --metadata cover-image= \
-	  -o $@
+	  -o text.tex
 
 # Separate cover PDF for Lulu upload (they want it as a standalone PDF)
 cover.pdf: Cover6x9.png
