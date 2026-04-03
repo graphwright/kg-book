@@ -746,7 +746,7 @@ If you do need provenance at query time, design for it from the start. The query
 
 `\chaptermark{The Identity Server}`{=latex}
 
-The identity server\index{identity server} is the authoritative component for entity identity across the knowledge graph. It handles the full lifecycle of an entity's identity: resolving a mention to an ID, promoting a provisional entity to canonical status, detecting synonyms, and merging duplicates into a single survivor. All of this must be correct under concurrent access from multiple worker processes and multiple server replicas. We'll revisit concurrency concerns later.
+The identity server\index{identity server} is the authoritative component for entity identity across the knowledge graph. It handles the full lifecycle of an entity's identity: resolving a mention to an ID, promoting a provisional entity to canonical status, detecting synonyms, and merging duplicates into a single survivor. The full architecture — including the domain plugin contract, Docker deployment, caching strategy, and reference implementation — is covered in the companion volume *The Identity Server: Canonical Identity for Knowledge Graphs*. This chapter describes what the pipeline needs to know about calling it.
 
 ### Identity Is Load-Bearing\index{entity resolution}\index{canonical entity}
 
@@ -754,51 +754,13 @@ Canonical entities with canonical IDs are the design decision that most separate
 
 The intuition is simple: a knowledge graph is useful when you can ask "what do we know about X?" and get an answer that aggregates across all sources. That aggregation only works if "X" is the same X everywhere. If one paper calls it "BRCA1," another "breast cancer type 1 susceptibility protein," and a third "the gene encoding the protein that interacts with BARD1," and your graph treats these as three different entities, you've lost the ability to reason. The relationships are there, but they're attached to fragments of an entity rather than the entity itself. Identity resolution is the process of collapsing that multiplicity into something a reasoning system can actually use.
 
-This chapter is about how to do that collapse deliberately, with the right tradeoffs for your domain.
+### The Pipeline's View
 
-### The Scale of the Problem
+The ingestion pipeline calls the identity server as a black box. After the LLM extraction pass produces raw mentions, the ingest stage calls `resolve(mention, entity_type)` for each one and receives back a stable ID — canonical if an authority matched, provisional otherwise. The pipeline stores that ID in the relationship record and moves on. It does not need to know about the lookup chain, the domain service, or the caching strategy.
 
-A concrete illustration from medlit: a single gene across a corpus of thousands of papers might appear as its official symbol (BRCA1), common aliases (breast cancer type 1 susceptibility protein, RNF53), protein product names (BRCA1 protein, breast cancer type 1 susceptibility protein), misspellings (BRCA-1, BRC1), and context-dependent abbreviations (the gene, the protein, the wild-type allele). Authors vary in their conventions. Review articles standardize; primary papers often don't. The same entity, dozens of surface forms.
+Provisional IDs are valid graph nodes. Relationships referencing them are valid edges. Evidence accumulates against provisional entities and is preserved through any later promotion or merge. The pipeline does not need to handle provisional entities specially.
 
-Multiply that across every entity type in every document. Genes, drugs, diseases, proteins, symptoms, procedures. Each has its own nomenclature, its own abbreviation culture, its own history of naming changes. A drug might appear under its generic name, its brand names in multiple countries, its chemical structure name, a trial identifier, or a lab shorthand. A disease might appear under its ICD code name, a colloquial term, a syndrome eponym, or a molecular subtype designation. Identity resolution isn't a detail you handle in a weekend. It's the central challenge of building a graph that spans diverse sources.
-
-The scale compounds. A corpus of 100,000 documents might produce millions of entity mentions. Many of those mentions will be duplicates in disguise. The deduplication\index{deduplication} problem -- clustering mentions that refer to the same thing -- is computationally tractable but requires care. The resolution problem -- mapping each cluster to a canonical identity -- is where domain knowledge and authority sources become essential.
-
-### Canonical IDs as Primary Keys\index{canonical ID!as primary key}
-
-The design decision to treat canonical IDs as the primary key rather than derived metadata sounds like an implementation detail. It has deep consequences.
-
-If the primary key is something you derive -- a hash of the normalized name, say, or an auto-incrementing integer you assign at ingestion -- then identity is an internal concern. Your graph is self-contained. It works, but it doesn't connect to anything else. You can't easily link to external databases that use MeSH terms or HGNC symbols, because your IDs don't match theirs. You can't ingest a new corpus and merge it with an existing one without re-resolving everything. The graph is an island.
-
-If the primary key is a canonical ID from an established authority -- a MeSH term for a disease, an HGNC symbol for a gene, an RxNorm code for a drug -- then identity is a shared concern. Your graph speaks the same language as the rest of your domain. New documents can be ingested and their entities resolved against the same authorities. External systems can query your graph by the IDs they already use. The graph is interoperable.
-
-Treating canonical IDs as primary keys also forces the right question at the right time. At ingestion, you must answer "what is this entity, really?" You can't defer it to query time, because the graph structure depends on the answer. That forces you to build resolution into the pipeline rather than bolting it on later, when retrofitting is painful.
-
-### Authority Lookup
-
-There are a number of authoritative ontologies in the world of medical literature: MeSH\index{MeSH} for diseases, HGNC\index{HGNC} for genes, RxNorm\index{RxNorm} for drugs, UniProt\index{UniProt} for proteins, and others. These are universally known, meticulously maintained, and trusted in that world. The stakes in medicine are high, and the care given to these ontologies reflects that. These are curated, maintained, and widely used. When your extraction produces "ketoconazole," you can look it up in RxNorm and get back a canonical drug ID. When it produces "Cushing's disease,"\index{Cushing's disease} you can look it up in MeSH and get back a term ID. The authority does the work of disambiguation -- "Cushing's disease" (pituitary adenoma) versus "Cushing's syndrome"\index{Cushing's syndrome} (the broader clinical picture) -- and gives you a stable identifier for each.
-
-Your domain may have equivalents. Legal documents have citation systems; a case or statute can be identified by a standard citation format. Chemistry has InChI and SMILES; a compound can be identified by its structure. Geography has gazetteers and coordinate systems. Library science has ISBNs and OCLC numbers. If your domain has established identifiers, use them. They exist precisely because the domain has an identity problem and the community has invested in solving it.
-
-If your domain doesn't have established authorities, you have choices. You can mint your own IDs -- a namespace you control, with IDs you assign to entities as you discover them. This works for self-contained graphs where interoperability isn't a priority. You can use an open identifier scheme -- DOI for papers, ORCID for researchers, Wikidata QIDs for general concepts -- where it fits. Or you can accept that your graph is self-contained and use internal IDs, with the understanding that merging with other graphs will require a separate resolution step. All of these are legitimate. What matters is making the choice deliberately and documenting it.
-
-### The Lookup Chain
-
-When an entity arrives from extraction with a name but no ID, you need a lookup strategy. The naive approach -- send every string to the authority API and hope for a match -- doesn't scale. Authority APIs have rate limits, latency, and cost. You need a chain: try the cheap, fast options first; escalate to the expensive ones only when necessary.
-
-Exact match first. Normalize the string -- lowercase, trim whitespace, expand common abbreviations if you have a mapping -- and look it up. Many entities will resolve this way. "Aspirin" in RxNorm, "BRCA1" in HGNC, "type 2 diabetes mellitus" in MeSH. If exact match fails, try fuzzy match.\index{fuzzy matching} The authority may have "acetylsalicylic acid" when you have "acetyl salicylic acid." Levenshtein distance, or a proper fuzzy matching library tuned to your domain, can find near-misses. Be careful: fuzzy matching can produce false positives. "ACE" might fuzzy-match to "ache" or "ice" if you're not constrained to the right vocabulary.
-
-When string-based matching fails, embedding-based reranking\index{embedding similarity} can help. Take the entity mention and the candidate matches from the authority, compute embeddings for both, and rank by similarity. This catches semantic matches that string distance misses -- "the gene encoding the tumor suppressor" might embed close to "BRCA1" even though the strings share no characters. Embedding search is more expensive and noisier than exact match, so it belongs later in the chain.
-
-The hard part is knowing when to accept a match and when to leave an entity provisional. Too aggressive, and you get false merges: two distinct entities collapsed into one, with relationships from both now incorrectly attached to a single node. Too conservative, and you get missed merges: duplicates in the graph, with the same entity appearing under multiple nodes and your aggregation undercounting the evidence. False merges are generally worse than missed merges -- they corrupt the graph in ways that are hard to detect and fix -- but the right threshold depends on your domain and what you're doing with the graph. A graph for hypothesis generation might tolerate more missed merges; a graph for clinical decision support might need to be more conservative about false merges.
-
-### Provisional Entities and Promotion\index{provisional entity}\index{promotion (entity)}
-
-Not everything gets resolved immediately, and that's fine. A novel compound from a paper published last month might not be in RxNorm yet. A rare disease variant might not have a MeSH term. An institution-specific abbreviation might not map to any authority. These entities still have relationships; they still belong in the graph. They live as provisional entities\index{provisional entity} -- nodes with a stable internal ID but no canonical authority ID -- until enough evidence accumulates, a better lookup succeeds, or a human reviewer makes a call.
-
-The promotion mechanism is the set of thresholds that govern when a provisional entity earns canonical status. In medlit, the logic is roughly: if a provisional entity appears in enough documents with enough consistency, and if a human has confirmed it or an authority has added it, promote it. The exact thresholds -- how many documents, what consistency, what confirmation -- are tunable and domain-specific. Medlit's thresholds reflect LLM extraction characteristics in a medical context: how often the same entity is mentioned across papers, how often extraction produces spurious variants, how often a provisional entity turns out to be a real thing worth promoting versus noise. Your domain may have different dynamics. Design for your domain rather than borrowing wholesale.
-
-Provisional entities are not second-class. They participate in the graph fully. They can have relationships, appear in traversals, and show up in query results. The difference is that they don't have an external canonical ID yet, which means they're not interoperable with systems that expect one. For many use cases, that's acceptable. For others, you'll want a human-in-the-loop process to review high-value provisional entities and either promote them (with a minted ID or a newly available authority match) or merge them into existing canonical entities.
+Provenance-derived entities — papers, authors, citations from document metadata — enter with their canonical ID already known (a PMC ID, an ORCID) and are passed directly to the identity server with that ID set. The identity server short-circuits the lookup chain and uses the provided ID directly.
 
 ### Provenance-Derived Entities and the Citation Graph
 
@@ -819,21 +781,6 @@ The `CITES` relationships deserve particular attention. Scientific papers includ
 The citation graph produced this way is valuable in its own right. It surfaces the intellectual neighborhood of your corpus: which papers cite which, which papers are frequently cited, which are co-cited. Papers that are cited by many papers in your corpus but not yet ingested themselves become natural candidates for corpus expansion -- the reference list is a built-in discovery mechanism for related literature.
 
 There is one practical gap: a cited paper that has not been ingested is a stub -- a `Paper` entity with a PMC ID as its canonical identifier but only that ID as its name, since no extraction has run on it. Resolving this is straightforward: NCBI's `esummary` API accepts batches of PMC IDs and returns titles, making it possible to populate the `name` field for all stub papers in a single pass of five or so HTTP requests regardless of how many citations are in the corpus. This is much faster than ingesting each paper, and title resolution is all you need for the citation graph to be human-readable.
-
-The identity server handles provenance-derived entities with a short-circuit path: if an entity arrives with an authoritative canonical ID already set (e.g. a PMC ID for a cited paper), the identity server skips the authority lookup and uses that ID directly. This is both faster and more reliable than routing a PMC ID through a name-based lookup chain.
-
-### Responsibilities
-
-1. **Canonical ID assignment.** Given a surface-form mention, return a stable entity ID — canonical if an authoritative external source (MeSH, HGNC, RxNorm, etc.) provides one, provisional otherwise. A provisional entity is promotable once domain-defined thresholds are met.
-2. **Promotion.** Elevate a provisional entity to canonical status when the domain's promotion policy determines that sufficient evidence has accumulated.  Promotion is a one-time, irreversible transition.
-3. **Synonym recognition.** Detect when two entities refer to the same real-world concept, using domain-defined criteria such as vector similarity, shared external identifiers, or string normalization.
-4. **Merging.** Collapse duplicate entities into a single survivor, redirecting all references from absorbed entities to the survivor. Absorbed entities are retained — not deleted — so that stale external references remain resolvable via a single redirect lookup.
-
-### Abstract Interface and Reference Implementation
-
-The identity server is defined as an abstract base class with four operations: `resolve`, `promote`, `find_synonyms`, and `merge`. An `on_entity_added` event hook ties synonym detection into the entity insert transaction. The interface is domain-pluggable: authority lookup strategy, synonym criteria, survivor selection, and promotion thresholds are all left to the domain implementation.
-
-The medlit reference implementation uses Postgres as the backing store, with `INSERT ... ON CONFLICT DO NOTHING` for `resolve`, `SELECT FOR UPDATE` for `promote`, and Postgres advisory locks for `merge`. Synonym detection uses pgvector for embedding-based nearest-neighbour search within the same transaction boundary. The full Python ABC, domain-pluggable interface, status rules, idempotency contract, locking strategy, and multi-replica deployment notes are in Appendix B.
 
 ## Chapter 12: The Ingestion Pipeline
 
@@ -1370,244 +1317,9 @@ Depth 1 is appropriate for direct relationships: an author's publications, a dru
 
 `\chaptermark{Reference Implementation}`{=latex}
 
-This appendix documents implementation details of the medlit reference project: the identity server abstract interface, the Postgres-backed implementation, and the ingestion pipeline's work queue, artifact files, and shared code. These details are specific to one implementation and will evolve; the principles behind them are in Chapters 11 and 12.
+This appendix documents implementation details of the medlit reference project: the ingestion pipeline's work queue, artifact files, parallelism, and shared code. These details are specific to one implementation and will evolve; the principles behind them are in Chapters 11 and 12.
 
-## Identity Server Abstract Interface
-
-```python
-from abc import ABC, abstractmethod
-
-class IdentityServer(ABC):
-
-    @abstractmethod
-    async def resolve(self, mention: str, context: dict) -> str:
-        """
-        Resolve a mention string to an entity ID.
-
-        Performs domain authority lookup and returns a canonical ID if one is
-        found. Otherwise creates and returns a new provisional ID. This
-        operation must be idempotent: resolving the same mention twice returns
-        the same ID.
-
-        Parameters
-        ----------
-        mention:
-            The surface form of the entity mention.
-        context:
-            Domain-defined context (e.g. document ID, domain name, entity
-            type hint, extraction metadata) used by authority lookup and
-            synonym detection.
-
-        Returns
-        -------
-        str
-            A canonical or provisional entity ID.
-        """
-
-    @abstractmethod
-    async def promote(self, provisional_id: str) -> str:
-        """
-        Attempt to promote a provisional entity to canonical status.
-
-        The domain PromotionPolicy determines whether promotion is warranted.
-        Behaviour by current entity status:
-
-        - provisional: checks policy; upgrades if thresholds are met.
-        - canonical: no-op; returns the existing canonical ID.
-        - merged: logs a warning with the stale ID; returns the survivor's ID.
-
-        This operation must be idempotent.
-
-        Returns
-        -------
-        str
-            The canonical ID (new or pre-existing), or the survivor ID if
-            the entity was merged.
-        """
-
-    @abstractmethod
-    async def find_synonyms(self, entity_id: str) -> list[str]:
-        """
-        Return the IDs of entities considered synonymous with the given entity.
-
-        Synonym criteria are domain-defined and may include cosine similarity
-        above a threshold, shared external identifier, or string normalisation
-        match. This method is read-only; it reports candidates without merging.
-
-        Returns
-        -------
-        list[str]
-            IDs of synonym candidates, not including entity_id itself.
-            Returns an empty list if no synonyms are found.
-        """
-
-    @abstractmethod
-    async def merge(self, entity_ids: list[str], survivor_id: str) -> str:
-        """
-        Merge a set of entities into a single survivor.
-
-        All references (relationships, mentions, bundle edges) pointing to any
-        absorbed entity are redirected to the survivor. Absorbed entities are
-        marked status=MERGED with merged_into=survivor_id so that stale
-        external references remain resolvable via a single lookup.
-
-        This operation must be idempotent: merging already-merged entities is
-        a no-op that returns the survivor ID.
-
-        Parameters
-        ----------
-        entity_ids:
-            The full set of IDs to unify, including the survivor.
-        survivor_id:
-            The ID that will remain after the merge. Must be a member of
-            entity_ids. Determined by the caller via
-            DomainSchema.preferred_entity.
-
-        Returns
-        -------
-        str
-            The survivor ID.
-        """
-
-    @abstractmethod
-    async def on_entity_added(self, entity_id: str, context: dict) -> None:
-        """
-        Event hook called after an entity is inserted or updated.
-
-        Must be called inside the same transaction as the entity insert so
-        that synonym detection fires only after the row is durably committed
-        and visible. This prevents the race where two concurrent workers each
-        see the other as a merge candidate before either insert completes.
-
-        Typical implementation:
-        1. Embed the entity (if not already embedded).
-        2. Call find_synonyms to identify candidates.
-        3. If candidates are found, call DomainSchema.preferred_entity to
-           select the survivor.
-        4. Call merge for each confirmed synonym pair.
-
-        This event-driven model subsumes batch synonym sweeps: a batch sweep
-        is equivalent to replaying on_entity_added for every entity in the
-        store.
-        """
-```
-
-## Domain-Pluggable Behaviour
-
-The identity server ABC deliberately leaves the following decisions to the domain:
-
-| Concern | Where it lives |
-|---|---|
-| Authority lookup | Domain implementation (e.g. MeSH API, DBPedia SPARQL, no-op) |
-| Synonym criteria | Domain implementation (e.g. cosine similarity threshold, shared CUI) |
-| Merge survivor selection | `DomainSchema.preferred_entity` |
-| Promotion thresholds | Domain `PromotionPolicy` |
-
-### Survivor Selection
-
-`DomainSchema` declares an abstract method for survivor selection:
-
-```python
-@abstractmethod
-def preferred_entity(self, candidates: list[BaseEntity]) -> BaseEntity:
-    """
-    Given a list of synonym candidates, return the preferred survivor.
-
-    Domain implementations encode their own preference rules, e.g.:
-    - Prefer canonical status over provisional
-    - Prefer the entity with the highest usage_count
-    - Prefer the entity with an authoritative canonical_ids entry
-    - Prefer the earlier created_at (more stable, longer-lived)
-
-    The returned entity must be a member of candidates.
-    """
-```
-
-`on_entity_added` calls `preferred_entity` to determine `survivor_id` before calling `merge`. Survivor policy is fully domain-controlled and does not belong in the identity server ABC.
-
-## Entity Status
-
-Entities carry one of three statuses:
-
-| Status | Meaning |
-|---|---|
-| `provisional` | Created from a mention with no authoritative external ID. Promotable via the domain promotion policy. |
-| `canonical` | Has a stable external ID (e.g. MeSH term, HGNC symbol) or has been promoted. Promotion is a one-time transition. |
-| `merged` | Absorbed into another entity. Retained for redirect lookups via `merged_into`. Excluded from normal queries. |
-
-### Merge × Promotion Status Rules
-
-The status of the survivor after a merge:
-
-- **provisional + provisional → provisional.** The merged entity remains promotable via the normal promotion policy.
-- **canonical + anything → canonical.** The survivor retains canonical status regardless of the absorbed entity's status.
-
-`promote` behaviour by status:
-
-- **provisional:** check promotion policy, upgrade if warranted.
-- **canonical:** no-op; returns the existing canonical ID.
-- **merged:** redirect to survivor ID; emit a log warning; do not raise.
-
-## Idempotency Contract
-
-Every mutating operation must be safe to call more than once with the same arguments. Workers may retry after transient failures and must not produce inconsistent state by doing so.
-
-| Operation | Idempotency mechanism |
-|---|---|
-| `resolve` | `INSERT ... ON CONFLICT DO NOTHING` on unique mention/domain key |
-| `promote` | Conditional update `WHERE status = 'provisional'` |
-| `merge` | Advisory lock + existence check; already-merged entities are a no-op |
-| `on_entity_added` | Delegates to `find_synonyms` (read-only) and `merge` (idempotent) |
-
-## Postgres-Backed Implementation
-
-Postgres is the natural backing store because it is already in the stack, provides row-level and advisory locking for cross-replica atomicity, and shares a transaction boundary with entity and relationship writes. No additional coordination service is required for the identity server itself.
-
-### Locking Strategy
-
-**`resolve`** — use `INSERT ... ON CONFLICT DO NOTHING` on a unique index over the normalised mention string and domain. Two concurrent workers resolving the same mention will serialize at the index; the second gets the ID the first created.
-
-**`promote`** — use `SELECT FOR UPDATE` on the provisional entity row, then check-and-update within the same transaction. This prevents two workers from both evaluating the promotion condition as true and both attempting the transition.
-
-**`merge`** — acquire a Postgres advisory lock keyed on the lexicographically sorted pair (or set) of entity IDs before beginning the merge transaction. This prevents two workers from merging the same pair in opposite orders, which would produce a deadlock or a double-merge. The advisory lock is released when the transaction commits.
-
-**`on_entity_added`** — must be called inside the same transaction as the entity insert. Synonym detection (`find_synonyms`) is read-only and acquires no locks. The subsequent `merge` call acquires its own advisory lock as above.
-
-### Authority Lookup Caching in `resolve`
-
-Authority lookup is a network call and is not idempotent in the face of transient failures. Results are cached in Redis, shared across all replicas:
-
-1. Check cache keyed on normalised mention + authority source version → hit: use cached ID, skip API call.
-2. Miss: call authority API, cache result, then proceed with DB insert.
-
-**Negative caching** — a "no canonical match" result is also cached with a shorter TTL, so a mention that later acquires an authoritative ID does not remain provisional indefinitely.
-
-**Cache key versioning** — keys are prefixed with the authority source version, e.g. `resolve:mesh:v2026:{mention}`. A new MeSH release is handled by flushing or re-keying without invalidating unrelated entries.
-
-**Residual risk** — if the API call succeeds but the process crashes before the DB insert commits, a retry hits the cache, gets the canonical ID, and re-attempts the insert. `ON CONFLICT DO NOTHING` handles this correctly.
-
-### Synonym Detection via pgvector\index{pgvector}
-
-`find_synonyms` uses vector embeddings and cosine similarity via the `pgvector` extension. Approximate nearest-neighbour search at scale is its core capability, and keeping similarity queries inside Postgres means they share the same transaction boundary as entity operations with no additional service.
-
-`on_entity_added` embeds the new entity (if not already embedded) and queries pgvector for neighbours above a domain-defined similarity threshold. The result list is passed to `preferred_entity` and then to `merge`.
-
-### Schema Notes
-
-A single `entities` table with a `status` column is preferred over separate tables for provisional and canonical entities. Single-table layout simplifies joins and allows a single index to cover all status-filtered queries.
-
-Merged entities are retained with `status = 'merged'` and a `merged_into` foreign key pointing to the survivor. This supports redirect resolution in a single lookup and preserves provenance for audit and retraction purposes.
-
-### Multi-Replica Deployment
-
-The Postgres-backed implementation is correct under any number of concurrent workers or server replicas without additional coordination:
-
-- **`resolve` races** are handled by the unique index and `ON CONFLICT DO NOTHING`. The second worker gets the row the first created; no duplicate entities are produced.
-- **`promote` races** are serialized by `SELECT FOR UPDATE`. Only one worker performs the transition; the others see the already-canonical row and return it.
-- **`merge` races** are serialized by the advisory lock on the sorted entity ID pair. Two workers attempting to merge the same pair in opposite orders will queue behind the same lock; the second will find the entities already merged and return the survivor ID as a no-op.
-- **`on_entity_added` races** — the requirement that this fires inside the entity insert transaction means two workers inserting different entities that are synonyms of each other will each trigger synonym detection after their own insert is visible. The first to detect the other will attempt a merge; the advisory lock ensures this is safe.
-
-Redis is required only for authority lookup caching in `resolve`. If authority lookup is not used (domain is no-op), Redis is not required for the identity server.
+The identity server's full specification — including the Python ABC, domain-pluggable behaviour, entity status rules, idempotency contract, Postgres schema, and Docker deployment — is in the companion volume *The Identity Server: Canonical Identity for Knowledge Graphs*, Appendix A and B.
 
 ## Ingestion Pipeline: Work Queue
 

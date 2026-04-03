@@ -107,15 +107,11 @@ This chapter examines key design decisions before building, particularly provena
 
 ### Chapter 11: The Identity Server
 
+The pipeline's view of the identity server: what to call, what comes back, and what provisional entities mean for the pipeline. Full architecture is in the companion volume *The Identity Server*.
+
 - **Identity Is Load-Bearing** — Canonical entities with canonical IDs are what separate a useful graph from sophisticated extraction; everything else is in service of identity.
-- **The Scale of the Problem** — One entity appears under dozens of forms; deduplication at scale is computationally tractable but requires care.
-- **Canonical IDs as Primary Keys** — Using external authority IDs as primary keys forces early identity resolution, enables interoperability, and prevents isolated graphs.
-- **Authority Lookup** — Established authorities exist in most domains; treating them as primary identifier sources creates interoperable graphs.
-- **The Lookup Chain** — Multi-stage resolution (exact → fuzzy → embedding) balances API cost with match quality.
-- **Provisional Entities and Promotion** — Not all entities resolve immediately; provisional entities participate fully until promotion thresholds are met.
-- **Provenance-Derived Entities and the Citation Graph** — Provenance-derived entities (papers, authors, citations) from document metadata are more reliable than extracted ones.
-- **Responsibilities** — Identity server handles canonical ID assignment, promotion, synonym recognition, and merging.
-- **Abstract Interface and Reference Implementation** — Abstract base class with domain-pluggable behavior; Postgres-backed `medlit` implementation uses advisory locks and pgvector.
+- **The Pipeline's View** — The ingest stage calls `resolve(mention, entity_type)` as a black box and receives a stable ID; provisional IDs are valid graph nodes that participate fully.
+- **Provenance-Derived Entities and the Citation Graph** — Papers, authors, and citations from document metadata enter with canonical IDs already known; the citation graph enables corpus expansion and surfaces the intellectual neighborhood of the corpus.
 
 ### Chapter 12: The Ingestion Pipeline
 
@@ -187,14 +183,8 @@ Reference for the breadth-first search query language designed for LLM-friendly 
 
 ## Appendix B: Reference Implementation Notes
 
-Detailed implementation guidance for the identity server and ingestion pipeline.
+Implementation guidance for the medlit ingestion pipeline. Identity server specification (Python ABC, domain plugin contract, Postgres schema, Docker setup) is in the companion volume *The Identity Server*, Appendix A and B.
 
-- **Identity Server Abstract Interface** — Python ABC defining `resolve`, `promote`, `find_synonyms`, `merge`, and `on_entity_added` operations.
-- **Domain-Pluggable Behaviour** — Table of concerns left to domain: authority lookup, synonym criteria, survivor selection, promotion thresholds.
-- **Survivor Selection** — `DomainSchema.preferred_entity` method for choosing merge survivors.
-- **Entity Status** — Three statuses: provisional, canonical, merged; status rules for merges and promotion.
-- **Idempotency Contract** — All operations must be safe to retry; mechanisms described for each operation.
-- **Postgres-Backed Implementation** — Locking strategies per operation, authority lookup caching in Redis, synonym detection via pgvector, schema notes, multi-replica deployment safety.
 - **Ingestion Pipeline: Work Queue** — Postgres `ingest_jobs` table structure for distributed work claiming with `SKIP LOCKED`.
 - **Paper Artifact Files** — Atomic write-then-rename strategy; serves recovery, auditability, and retraction purposes.
 - **Parallelism** — Per-stage bottlenecks and independent concurrency limits.
