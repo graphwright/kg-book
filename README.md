@@ -10,6 +10,8 @@ As stuff is discarded, we look to the Python source files in the `kgraph` reposi
 
 This `kg-book` repository is for the first of the two tracks.
 
+Raw URL for `outline.md`: https://raw.githubusercontent.com/wware/kg-book/main/outline.md
+
 ```bash
 pandoc outline.md \
     --metadata title="Knowledge Graphs from Unstructured Text" \
