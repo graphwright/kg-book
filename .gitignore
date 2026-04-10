@@ -1,0 +1,6 @@
+# Generated mkdocs content (built by CI)
+docs/
+mkdocs.yml
+
+# Release archives
+kg-book-*.tar.gz

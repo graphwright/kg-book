@@ -1,0 +1,72 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            pandoc \
+            texlive-xetex \
+            texlive-fonts-recommended \
+            texlive-fonts-extra \
+            texlive-latex-extra \
+            python3-yaml
+
+      - name: Build EPUB
+        run: make text.epub
+
+      - name: Build PDF
+        run: make text.pdf
+
+      - name: Generate mkdocs content tree
+        run: |
+          python3 scripts/split_for_mkdocs.py \
+            --src text.md \
+            --out docs \
+            --mkdocs-yml mkdocs.yml
+
+      - name: Create release timestamp
+        id: timestamp
+        run: echo "ts=$(date -u '+%Y%m%dT%H%M%S')" >> "$GITHUB_OUTPUT"
+
+      - name: Package release archive
+        env:
+          TS: ${{ steps.timestamp.outputs.ts }}
+        run: |
+          ARCHIVE="kg-book-${TS}.tar.gz"
+          tar -czf "${ARCHIVE}" \
+            text.pdf \
+            text.epub \
+            docs/ \
+            mkdocs.yml
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "release-${{ steps.timestamp.outputs.ts }}"
+          name: "Release ${{ steps.timestamp.outputs.ts }}"
+          body: |
+            Automated release built from commit ${{ github.sha }}.
+
+            This archive contains:
+            - `text.pdf` — interior PDF (Lulu-ready)
+            - `text.epub` — EPUB edition
+            - `docs/` — Markdown content split into mkdocs-compatible folders
+            - `mkdocs.yml` — mkdocs site configuration
+          files: ${{ env.ARCHIVE }}
+          fail_on_unmatched_files: true
