@@ -24,6 +24,7 @@ jobs:
             texlive-fonts-recommended \
             texlive-fonts-extra \
             texlive-latex-extra \
+            inkscape \
             python3-yaml
 
       - name: Build EPUB
