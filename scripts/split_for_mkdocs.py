@@ -161,13 +161,17 @@ def slugify(title: str) -> str:
 # ---------------------------------------------------------------------------
 
 def parse_frontmatter(src: str):
-    """Return (metadata_dict, body_text) splitting YAML front-matter."""
+    """Return (metadata_dict, body_text) splitting YAML front-matter.
+
+    Accepts both '---' and '...' as the closing delimiter.
+    """
     if src.startswith('---'):
-        end = src.index('---', 3)
-        yaml_str = src[3:end].strip()
-        meta = yaml.safe_load(yaml_str)
-        body = src[end + 3:].lstrip('\n')
-        return meta, body
+        m = re.search(r'\n(---|\.\.\.)\n', src[3:])
+        if m:
+            yaml_str = src[3: m.start() + 3].strip()
+            meta = yaml.safe_load(yaml_str)
+            body = src[m.start() + 3 + len(m.group(0)):].lstrip('\n')
+            return meta, body
     return {}, src
 
 
