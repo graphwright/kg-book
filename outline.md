@@ -1,5 +1,27 @@
 # Knowledge Graphs from Unstructured Text — Outline
 
+## Foreword: A Manifesto for Machine Knowledge
+
+*This foreword appears in all three volumes of the Graphwright series.*
+
+- **The Stakes** -- Machine reasoning is now deployed in high-stakes domains:
+  medicine, law, engineering, spaceflight. The cost of error is real.
+- **What LLMs Cannot Do** -- Mastery of syntax without identity: no persistent
+  notion of what things *are*, no stable reference, no chained causality.
+- **Why RAG Is Not Enough** -- Retrieval improves relevance but still operates
+  on strings, not things; it cannot say "this refers to that."
+- **The Three Requirements** -- Identity (canonical IDs, deduplication, a fixed
+  entity type set), Type (a finite predicate vocabulary with domain/range
+  constraints), and Provenance (source traceability, evidence aggregation,
+  confidence grounded in origin).
+- **The Typed Graph** -- A data model that satisfies all three: well-formed
+  claims, grounded identities, traceable sources. Not a guarantee of truth,
+  but a guarantee of inspectability, reproducibility, and correctness.
+- **The Pipeline** -- Unstructured text → extraction → mentions → identity
+  resolution → typed graph → queries/traversals → machine reasoning.
+
+---
+
 ## Preface
 
 Introduction to LLM hallucination as the motivating problem, knowledge graphs as the solution, and an overview of the book's structure and the `kgraph`/`medlit` example project.
