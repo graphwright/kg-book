@@ -198,6 +198,31 @@ uv run python -m medlit.scripts.extract \
 
 The longest lines in the existing codebase already exceed this limit (up to ~105 chars) and should be fixed when those sections are edited.
 
+### Pandoc verbatim pitfall
+
+Plain ` ``` ` blocks (no language tag) become `\begin{verbatim}` in LaTeX.
+Pandoc **will not** treat the closing ` ``` ` as a fence closer if the block
+content looks like a markdown list (numbered items `1.` `2.` etc.) -- it
+parses the list items as real markdown instead, and the closing ` ``` ` then
+opens a new verbatim block that swallows the following prose.
+
+**Rule**: Any plain ` ``` ` block whose content contains `1.` / `2.` numbered
+items or other markdown-looking syntax must use ` ```text ` instead, to prevent
+pandoc from interpreting the contents.
+
+Similarly, avoid extra ` ``` ` fences inside or between related code blocks --
+a stray open fence will swallow everything until the next ` ``` ` as verbatim.
+
+After any significant edit, check the build log for overfull hboxes:
+```bash
+grep -c "Overfull" text.log
+```
+A count above ~10 usually indicates a runaway verbatim block. Investigate with:
+```bash
+grep -n '\\begin{verbatim}\|\\end{verbatim}' text.tex
+```
+Any verbatim block spanning more than ~20 lines is suspect.
+
 ---
 
 ## Document Structure Notes
