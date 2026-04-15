@@ -358,7 +358,7 @@ The finding itself is not stated as a simple subject-verb-object. "Patients trea
 
 This is not an unusually complex sentence for the biomedical literature. It's representative. And the extraction problem is the problem of reading sentences like this, millions of them, across thousands of papers, and producing structured, typed, provenance-tracked knowledge from them reliably enough to be useful.
 
-### NLP was insufficient to the task
+### Classical NLP Was Brittle Here
 
 It is worth being honest about what the field of natural language processing actually achieved before large language models arrived, because the temptation to either overstate or dismiss that progress is real.
 
@@ -376,21 +376,15 @@ There was also something more fundamental. Classical NLP worked by learning stat
 
 The honest summary: classical NLP built extractors that worked well on the easy cases, degraded gracefully on the medium cases, and failed in ways that were hard to characterize on the hard cases. For many applications, "works well on the easy cases" was sufficient. For building a knowledge graph from a large, diverse scientific literature, it wasn't.
 
-### Economics of LLMs for extraction
+### LLMs Handle It Naturally
 
-The marginal cost of a new extraction task with a large language model is a prompt — the cycle from "I want to extract this kind of relationship" to "I have a working extractor" is measured in hours, not months, and schema changes don't require retraining. Chapter 6 develops the full economic argument. What matters here is what LLMs bring to the specific challenges of extraction: Hedging and negation -- the bane of classical systems -- are handled naturally by a model that has learned from an enormous amount of human language, most of which contains hedging and negation. Implicit relationships -- the ones a knowledgeable reader infers rather than reads directly -- are within reach of a model with enough domain knowledge in its training distribution. Cross-sentence dependencies, which defeated most classical architectures, are handled by the attention mechanisms that are foundational to the transformer architecture\index{transformer architecture}. Domain jargon is less of a problem when the model has been trained on a corpus large enough to have seen most of it.
+Hedging and negation -- the bane of classical systems -- are handled naturally by a model that has learned from an enormous amount of human language, most of which contains hedging and negation. A transformer trained on tens of billions of words has encountered "the effect was attenuated" in hundreds of contexts; it does not confuse attenuation with negation, and it does not fail to recognize that "did not inhibit" means something different from "inhibits". Implicit relationships -- the ones a knowledgeable reader infers rather than reads directly -- are within reach of a model with enough domain knowledge in its training distribution. Cross-sentence co-reference, which defeated most classical architectures, is handled by the attention mechanisms\index{transformer architecture} that are foundational to the transformer architecture. Domain jargon is less of a problem when the model has been trained on a corpus large enough to have seen most of it.
 
-None of this is magic, and it's worth being precise about what it isn't.
+The marginal cost of a new extraction task is a prompt. The cycle from "I want to extract this kind of relationship" to "I have a working extractor" is measured in hours, not months. Schema changes don't require retraining. A domain expert who can't write code can read an extraction prompt, understand what it's asking for, and suggest improvements. That feedback loop -- always important, almost always expensive to close in classical systems -- becomes something you can iterate in an afternoon.
 
-Hallucination (Chapter 1) takes a specific form in extraction: the model can invent entity names that don't appear in the source, fabricate relationships the text doesn't assert, and misattribute provenance. Validation is not optional.
+None of this is magic, and it's worth being precise about what it isn't. Hallucination (Chapter 1) takes a specific form in extraction: the model can invent entity names that don't appear in the source, fabricate relationships the text doesn't assert, and misattribute provenance. Validation is not optional. Context windows are finite -- a relationship that spans a section boundary may be missed. And non-determinism\index{non-determinism} -- the same prompt run twice may produce slightly different output -- has implications for reproducibility that any serious pipeline needs to address; caching\index{caching} extraction results is not just an efficiency measure, it's a reproducibility measure.
 
-Context window limits matter for scientific literature, where a paper is often tens of thousands of words and the relationships that matter may span sections written pages apart. The chunking strategies in Chapter 10 are a response to this reality. They work, but they introduce their own complications: a relationship that spans a chunk boundary may be missed, and the context available to the model for any given extraction is always less than the full paper.
-
-Cost at serious scale is real. Extracting a comprehensive knowledge graph from a large corpus -- hundreds of thousands of papers -- requires a large number of API calls, and API calls are not free. The economics are better than classical NLP at the research prototype scale and require more careful management at production scale.
-
-And non-determinism\index{non-determinism} -- the fact that the same prompt, run twice against the same text, may produce slightly different output -- has implications for reproducibility that any serious pipeline needs to address. Caching\index{caching} extraction results is not just an efficiency measure; it's a reproducibility measure.
-
-This chapter ends honestly because the rest of the book is the engineering response to these limitations. LLMs are the best tool we have ever had for the extraction problem. That's a strong claim and the evidence for it is in the following chapters. But "best we've ever had" and "good enough to use without careful engineering" are not the same thing, and conflating them leads to pipelines that work in demos and break on real corpora.
+The rest of the book is the engineering response to these limitations. LLMs are the best tool we have ever had for the extraction problem -- but "best we've ever had" and "good enough to use without careful engineering" are not the same thing, and conflating them leads to pipelines that work in demos and break on real corpora.
 
 # Part II: LLMs Change the Equation
 
@@ -398,27 +392,7 @@ This chapter ends honestly because the rest of the book is the engineering respo
 
 `\chaptermark{LLMs Make This Practical Now}`{=latex}
 
-Getting knowledge *in* -- turning unstructured text into structured, typed, provenance-tracked graph data at scale -- was the hard part, and it stayed hard for a long time. This chapter is about why it stopped being hard.
-
-The answer is large language models, but the reason they matter for this problem is not primarily about capability. It's about economics. The capability is real and we'll get to it. But capability arguments for AI systems tend to slide into hype, and the hype obscures what actually changed. What actually changed is that the cost structure of knowledge graph construction from unstructured text underwent a phase transition -- from "research project" to "afternoon of prompt engineering" -- and that change in cost is what changed who can build these things and what they can be built for.
-
-### The Economics Argument First\index{economics of extraction}
-
-Before we talk about what LLMs can do, let's talk about what classical NLP couldn't afford to do.
-
-Chapter 5 walked through the classical extraction pipeline and its limitations. The technical limitations were real, but they weren't the main barrier. The main barrier was the economics of domain adaptation. If you wanted to extract knowledge from biomedical literature, you needed an extraction system tuned to biomedical literature: trained on annotated biomedical data, evaluated against biomedical benchmarks, maintained as the schema evolved and the literature changed. If you then wanted to do the same for legal documents, you were starting over. Different vocabulary, different sentence structures, different implicit conventions about how claims are stated. A new training dataset. A new annotation effort. New domain experts, recruited, trained, and calibrated. A new deployment pipeline.
-
-This wasn't a failure of the technology. It was the technology working as designed. Supervised machine learning systems are trained on distributions, and they work on those distributions. Adapting them to new distributions is a research problem. For well-resourced organizations with stable, high-value domains -- pharmaceutical companies mining drug interaction literature, financial institutions processing regulatory filings -- the investment made sense. The organizations that couldn't make that investment simply didn't build knowledge graphs from their unstructured text, because the alternative was too expensive.
-
-The practical consequence was that knowledge graph construction from literature was a capability concentrated in a small number of well-resourced actors. Everyone else either used the knowledge graphs those actors made available, or went without.
-
-What changes with large language models is the marginal cost of a new extraction task.
-
-Not zero -- there's no free lunch, and we'll catalog the costs honestly in a moment. But the order of magnitude shifts dramatically. A classical NLP system adapted to a new domain required months of work from a team with specialized skills. An LLM-based extraction pipeline for a new domain requires a prompt that describes what you're looking for. A good prompt takes thought, iteration, and domain knowledge; we'll spend Chapter 10 on how to write one. The cycle from "I want to extract this kind of relationship" to "I have a working extractor" is measured in hours or days, not months. Schema changes don't require retraining. A domain expert who can't write code can look at a prompt, understand what it's asking for, and suggest improvements. The feedback loop between schema design and extraction quality -- always important, almost always expensive to close in classical systems -- becomes something you can iterate through in an afternoon.
-
-This is a significant upheaval, not an incremental improvement. When the cost of a capability drops by two orders of magnitude, the population of people and organizations who can use it changes qualitatively. Knowledge graph construction from unstructured text is no longer a capability reserved for organizations with research teams and annotation budgets. It's available to anyone with a corpus, a clear schema, and the patience to iterate.
-
-That matters for who builds knowledge graphs, what domains get covered, and ultimately what gets done with them. The broader implications are in Part IV. For now, the point is narrower: the barrier that kept this technology concentrated in a few hands has lowered. The rest of this chapter is about why the lowering is real and durable, and where the remaining barriers are.
+Chapter 5 closed with the economics argument: the marginal cost of a new extraction task is a prompt, not a research project. That shift is assumed here. This chapter is about what LLMs actually are for extraction purposes, why prompts work as schema binding, what they handle well, and where the remaining limitations are.
 
 ### What LLMs Actually Are, For This Purpose
 
