@@ -49,10 +49,7 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 - **Doug Lenat and Cyc** — Cyc attempted to hand-encode common sense; it demonstrated that the extraction bottleneck, not reasoning capability, is the fundamental limit.
 - **The Semantic Web and the RDF Era** — The vision of machine-readable linked data faced adoption barriers; Linked Data emerged as pragmatic but still unable to extract from unstructured text.
 - **The Industrial Knowledge Graph** — Google's Knowledge Graph succeeded at scale using curated structured sources; it revealed that extraction from unstructured text remained the unsolved problem.
-- **The Extraction Bottleneck** — Every knowledge representation approach in the past 60 years hit the same wall: the cost and difficulty of reliably extracting structured knowledge from natural language prose.
-- **The Robot Scientist** — Adam and Eve demonstrated autonomous scientific reasoning over knowledge graphs; they were limited only by the bottleneck of hand-curated domain knowledge.
-- **The Cross-Disciplinary Machine** — Cross-domain reasoning requires recognizing identical entities across fields; canonical identity resolution anchored to ontologies enables this.
-- **The Gap Is the Book** — The infrastructure now exists to extract knowledge at scale; this book addresses how to build it.
+- **The Extraction Bottleneck, and Its Resolution** — Every prior approach hit the same wall: reliably extracting structured knowledge from natural language prose. LLMs dissolve this bottleneck; the rest of this book is about how to build what that makes possible.
 
 ### Chapter 3: What Is a Knowledge Graph, Really?
 
@@ -73,9 +70,7 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 
 ### Chapter 5: The Extraction Problem
 
-- **Humans Are Smarter Than You Think** — Scientific text is complex, with hedging, negation, implicit relationships, cross-sentence dependencies, and domain jargon.
-- **NLP Was Insufficient to the Task** — Classical NLP made progress on narrow tasks but was brittle on hedging, implicit relationships, long-range dependencies, and domain adaptation.
-- **Economics of LLMs for Extraction** — LLMs handle hedging, negation, implicit relationships, and jargon naturally, with the marginal cost of new extraction tasks dropping dramatically.
+- **Humans Are Smarter Than You Think** — Scientific text is complex, with hedging, negation, implicit relationships, cross-sentence dependencies, and domain jargon. Classical NLP made progress but was brittle on all of these; LLMs handle them naturally. The marginal cost of a new extraction task is now a prompt, not a research project.
 
 ---
 
@@ -83,7 +78,7 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 
 ### Chapter 6: LLMs Make This Practical Now
 
-- **The Economics Argument First** — Classical NLP required months of domain adaptation; LLMs require hours of prompt iteration, opening the technology to smaller organizations.
+- **LLMs Changed the Cost Structure** — The cycle from "I want to extract this relationship" to "I have a working extractor" dropped from months to hours; schema changes require editing a prompt, not retraining a model.
 - **What LLMs Actually Are, For This Purpose** — LLMs are pattern-completion engines with internalized knowledge of domain relationships; the prompt binds that knowledge to a schema.
 - **The Prompt as Schema Binding** — Schema in the prompt (not in model weights) enables rapid iteration, collaborative review with domain experts, and version control.
 - **Handling What Classical Systems Couldn't** — LLMs handle hedging, negation, implicit relationships, cross-sentence dependencies, and domain jargon far better than classical systems.
