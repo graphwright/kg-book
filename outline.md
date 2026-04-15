@@ -134,7 +134,10 @@ The pipeline's view of the identity server: what to call, what comes back, and w
 
 - **Why Multiple Passes at All** — Multiple stages provide isolation, recoverability, debuggability, and natural units of work (per-document bundles).
 - **Parsing: Getting to Text** — Extract structured text from source formats; preserve section boundaries for semantic weight.
-- **Extraction: The LLM Pass** — Schema-binding prompts describe entity and relationship types precisely; balance specificity (precision) with flexibility (recall).
+- **Extraction: The LLM Pass** — Two distinct prompts, sequenced: entity extraction first, relationship extraction second.
+  - **Prompt 1: Entity Extraction** — The finite list of entity types from `domain_spec.py` is injected verbatim; the model is asked to identify all mentions of those types and only those types. The closed-world assumption on entity types lets the prompt be precise: "identify instances of these N types; do not invent others." The vocabulary from the prior pass is injected as preferred names, reducing synonym noise at the source.
+  - **Prompt 2: Relationship Extraction** — The resolved entities from Prompt 1 are provided as the subject/object candidate set; the finite predicate list with domain and range constraints is injected. The model is asked: for each predicate, does any relationship of that type hold between any pair of entities in scope? Domain and range constraints let the prompt eliminate impossible pairs before the model is asked about them, reducing hallucination surface area and token cost.
+  - **Why the sequence matters** — Relationship extraction is much more reliable when it operates over a bounded, already-resolved entity set rather than raw text. The two-pass design trades latency for precision and makes each pass's failures independently diagnosable.
 - **Vocabulary: Building a Shared Terminology** — Optional dedicated pass that builds a shared vocabulary and injects it into extraction for consistency.
 - **Deduplication** — Group mentions, resolve to canonical forms; authority lookup handles many cases; embedding and co-occurrence help with residue.
 - **Assembly** — Merge per-document extractions; aggregate evidence across sources; design bundle structure carefully.
