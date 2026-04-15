@@ -175,6 +175,29 @@ Unstructured Text
 ```
 ````
 
+### Line length limit
+
+The text block on a 6×9 page at 11pt with these margins is approximately **4.5 inches wide**, which fits roughly **65 characters** of monospace text before overflow.
+
+`index-header.tex` enables `breaklines` via `fvextra`, so xelatex will wrap overlong lines automatically -- but the break points are arbitrary and the result looks bad. **Keep all code block lines to 65 characters or fewer.**
+
+For long strings (evidence text, long paths, long JSON values), break manually:
+
+```json
+"evidence": "Serum cortisol levels were elevated in
+  all patients diagnosed with hypercortisolism."
+```
+
+For long shell commands, use `\` continuation:
+
+```bash
+uv run python -m medlit.scripts.extract \
+    --input-dir pmc_xmls/ \
+    --output-dir extracted/
+```
+
+The longest lines in the existing codebase already exceed this limit (up to ~105 chars) and should be fixed when those sections are edited.
+
 ---
 
 ## Document Structure Notes
