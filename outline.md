@@ -41,15 +41,10 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 
 ### Chapter 2: A Brief History of Knowledge Representation
 
-- **The Idea That Wouldn't Die** -- Decades of ambitious projects sought to build machines that understand rather than merely retrieve, but all stumbled on getting knowledge *in*.
-- **What the Frog's Eye Tells Us** -- Perception and intelligence require structured, selective feature extraction--not passive accumulation of raw data.
-- **Semantic Networks and the Frame Problem** -- Quillian's semantic networks and Minsky's frames introduced structured relationships and context-dependent knowledge representation as alternatives to flat facts.
-- **Meaning is Relational** -- Hofstadter's analysis: meaning arises from symbol systems and relationships, not individual symbols; the knowledge graph embodies this principle.
-- **The Logic Wars** -- Expert systems succeeded on narrow domains but failed to scale; formal logic remained brittle; the field moved to statistical methods.
-- **Doug Lenat and Cyc** -- Cyc attempted to hand-encode common sense; it demonstrated that the extraction bottleneck, not reasoning capability, is the fundamental limit.
-- **The Semantic Web and the RDF Era** -- The vision of machine-readable linked data faced adoption barriers; Linked Data emerged as pragmatic but still unable to extract from unstructured text.
-- **The Industrial Knowledge Graph** -- Google's Knowledge Graph succeeded at scale using curated structured sources; it revealed that extraction from unstructured text remained the unsolved problem.
-- **The Extraction Bottleneck, and Its Resolution** -- Every prior approach hit the same wall: reliably extracting structured knowledge from natural language prose. LLMs dissolve this bottleneck; the rest of this book is about how to build what that makes possible.
+- **The Idea That Wouldn't Die** -- Decades of ambitious projects sought to build machines that understand rather than merely retrieve; the goal was always right, the tools were always insufficient.
+- **Meaning is Relational** -- From Minsky's frames to Hofstadter's symbol systems: knowledge isn't a list of facts, it's a web of typed relationships. The knowledge graph is what that insight looks like as buildable infrastructure.
+- **The Bottleneck Was Always Extraction** -- Expert systems, Cyc, the Semantic Web, Google's Knowledge Graph -- all hit the same wall: getting knowledge in from natural language prose. Not a failure of reasoning; a failure of economics.
+- **LLMs Change the Economics** -- The marginal cost of a new extraction task dropped from months to hours. That's the only thing that changed, and it changes everything.
 
 ### Chapter 3: What Is a Knowledge Graph, Really?
 
@@ -80,7 +75,6 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 
 ### Chapter 6: LLMs Make This Practical Now
 
-- **LLMs Changed the Cost Structure** -- The cycle from "I want to extract this relationship" to "I have a working extractor" dropped from months to hours; schema changes require editing a prompt, not retraining a model.
 - **What LLMs Actually Are, For This Purpose** -- LLMs are pattern-completion engines with internalized knowledge of domain relationships; the prompt binds that knowledge to a schema.
 - **The Prompt as Schema Binding** -- Schema in the prompt (not in model weights) enables rapid iteration, collaborative review with domain experts, and version control.
 - **Handling What Classical Systems Couldn't** -- LLMs handle hedging, negation, implicit relationships, cross-sentence dependencies, and domain jargon far better than classical systems.
@@ -170,7 +164,7 @@ The pipeline's view of the identity server: what to call, what comes back, and w
 - **What Machines Would See That We Can't** -- Graphs surface patterns filtered out by confirmation bias, prestige bias, and recency bias; different views complement each other.
 - **The Combinatorial Argument** -- Important discoveries sit at domain intersections; graphs enumerate candidate connections humans couldn't hold in mind.
 - **Linguistic and Geographic Blind Spots** -- Graphs built from diverse corpora surface work citation networks systematically hide; particularly valuable for rare diseases and regional research.
-- **The Robot Scientist, Revisited** -- Adam and Eve demonstrated the pattern; extraction pipelines now make building the knowledge representation practical at scale.
+- **The Robot Scientist** -- Adam reasoned over a knowledge graph of yeast biology, formed hypotheses, ran experiments, and confirmed results -- autonomously. Eve extended the pattern to drug discovery. The bottleneck wasn't capability; it was that building the knowledge representation required a team of domain experts working by hand. That bottleneck is gone.
 
 ### Chapter 15: Who Benefits, Who Decides
 
