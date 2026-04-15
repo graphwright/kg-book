@@ -1522,3 +1522,94 @@ def _run_pass2_pass3_load(
 `run_ingest` is the identity-server deduplication stage. `run_build_bundle` assembles the kgbundle including NCBI title fetching. `load_bundle_incremental` pushes the new bundle into the live graph storage without a restart.
 
 The vocabulary and extraction stages are not in this shared path -- they are CLI-only for batch runs, since interactive single-paper ingestion via the MCP tool skips the vocabulary pass (the vocabulary built from the existing corpus is already embedded in the seeded synonym cache). For the MCP use case, the paper is extracted with the current vocabulary as context, then ingested, and the bundle is rebuilt and reloaded.
+
+## Extraction Prompt Template
+
+The extraction prompt is a Jinja2 template with three injection points and a small number of structural rules that apply regardless of domain. What follows is an abstracted version that shows the structure; the full medlit domain instructions serve as a worked example.
+
+```
+You are a knowledge extraction expert. Extract entities
+and relationships from the given text and return a single
+JSON object with this structure (use exact keys):
+
+- "entities": array of {
+    "id"        (string, unique within this response),
+    "class"     (entity type from the list below),
+    "name"      (canonical surface form),
+    "synonyms"  (array of alternate names)
+  }
+
+- "evidence_entities": array of {
+    "id"     (format: paper_id:section:para_idx:method),
+    "class": "Evidence",
+    "text"   (verbatim passage from the source)
+  }
+
+- "relationships": array of {
+    "subject"          (id from entities array),
+    "predicate"        (from predicate list below),
+    "object"           (id from entities array),
+    "evidence_ids"     (array of evidence entity ids),
+    "confidence"       (0.0–1.0),
+    "linguistic_trust" ("asserted"|"suggested"|"speculative")
+  }
+
+CRITICAL: "subject" and "object" must be the "id" of an
+entry in the "entities" array. If an entity appears in a
+relationship but is not yet in the entities array, add it
+first. Never use a free-form name as subject or object.
+
+Return ONLY valid JSON. No markdown, no commentary.
+
+{{ domain_instructions }}
+
+Entity types: {{ entity_types }}
+Predicates:   {{ predicates }}
+{{ vocab_section }}
+```
+
+The three injection points:
+
+- `{{ entity_types }}` -- rendered from the domain spec; one line per type with label, description, and any classification guidance. In medlit this is the full list (Disease, Gene, Drug, Protein, ...) with concise definitions and edge-case rules (e.g. "if both Hormone and Protein, classify as Hormone").
+
+- `{{ predicates }}` -- rendered from the domain spec; one line per predicate with description and domain/range guidance. Listing domain and range steers the model toward specific predicates rather than generic fallbacks like `ASSOCIATED_WITH`.
+
+- `{{ vocab_section }}` -- injected when a vocabulary pass has been run; lists preferred names for entities seen across the current batch. When present, the model uses consistent surface forms, reducing deduplication noise downstream. When absent (single-paper MCP use), the section is empty and the model names entities as it sees fit.
+
+The `domain_instructions` block is where domain-specific classification rules and output conventions live. In medlit:
+
+```
+This domain covers peer-reviewed medical literature.
+Prefer established terminology over colloquial.
+When in doubt about entity type, prefer the more specific.
+Connect Author and Institution to the graph via
+relationships; do not leave them as standalone entities.
+
+## Entity type classification
+Classify at the most specific functional role. If an
+entity is both a hormone and a protein, classify as
+Hormone. Enzymes should be Enzyme, not Protein.
+Extract pathological processes (hyperplasia, hypertrophy,
+atrophy, etc.) as Symptom entities.
+
+## Predicates
+Use the predicate list from the config. For SAME_AS,
+use "resolution": null and "note" in the output.
+When text describes a hormone "causing" a pathological
+change "of" an anatomical structure (e.g. "ACTH
+determines hyperplasia of the adrenal cortex"), extract:
+(1) AGENT CAUSES SYMPTOM
+(2) SYMPTOM LOCATED_IN ANATOMICAL_STRUCTURE
+
+## Linguistic trust
+For each relationship, classify linguistic trust:
+asserted (direct statement), suggested (soft language),
+speculative (hedged).
+
+## Evidence format
+Evidence id format:
+  {paper_id}:{section}:{paragraph_idx}:llm
+Use ==CURRENT_PAPER== as paper_id when PMC ID is unknown.
+```
+
+The domain instructions block is the place for rules that are domain-specific: what to do about entities that span multiple types, which predicates to prefer for common patterns in the literature, how to handle missing identifiers. Keep it short and declarative. Rules the model must actually follow during extraction belong here; background on why those rules exist does not.
