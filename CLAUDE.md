@@ -1,6 +1,24 @@
 # Book Formatting Conventions
 
-This file documents the formatting practices used in `text.md` and previously in `outline.md`, so they don't need to be re-established in each working session.
+This file documents the formatting practices used in `text.md` and `outline.md`.
+
+---
+
+## Series Context
+
+This is the second book in the Graphwright series:
+
+- First book (`../identity-book`): *The Typed Graph: How Machine Knowledge Earns Trust*
+- Second book (this book): *Knowledge Graphs from Unstructured Text*
+- Third book (`../bfl-qs-book`): *BFS-QL: A Graph Query Protocol for Language Models*
+
+A *typed knowledge graph* is one with a fixed finite set of entity types and a fixed finite set of permitted predicates. Each predicate has a domain (a fixed finite set of allowable subject entity types) and a range (a fixed finite set of allowable object entity types). Therefore "aspirin treats migraine" is permitted because "drug" is in the domain for "treats" and "condition" is in the range for "treats". But "BRCA1 treats schoolbus" is not permitted.
+
+---
+
+## Writing Style
+
+Keep the writing as **clear** as possible -- do not make the reader work hard. Avoid over-reliance on usages common in the AI/LLM/tech community or the NLP/linguistics community in favor of standard English usage, as many readers will be non-technical. Acronyms, even common ones like "LLM", should be spelled out in parentheses on first usage.
 
 ---
 
@@ -40,15 +58,18 @@ The PDF build pipeline is: `pandoc → text.tex`, then `xelatex` (×2) with `mak
 
 The book uses pandoc with `--top-level-division=part`:
 
-- `#` → Part
+- `#` → Part (also used for Appendix headings: `# Appendix A: ...`)
 - `##` → Chapter
-- `###` → Section (within a chapter)
+- `###` → Section (within a chapter or appendix)
+- `####` → Subsection (within a section)
 
 Chapter headings use title case: `## Chapter 2: A Brief History of Knowledge Representation`
 
 Section headings use sentence case: `### The idea that wouldn't die`
 
 (Exception: section headings that are proper names or established phrases keep their capitalization.)
+
+Appendix sections use `###` (not `##`), since the appendix itself is already at the `#` (Part) level.
 
 ### YAML Frontmatter
 

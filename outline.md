@@ -1,8 +1,25 @@
 # Knowledge Graphs from Unstructured Text -- Outline
 
+## Background information that does not go in the book
+
+A *typed knowledge graph* is one with a fixed finite set of entity types and
+a fixed finite set of permitted predicates. Each predicate has a domain, which
+is a fixed finite set of allowable entity types, and a range, which is also a
+fixed finite set of allowable entity types. Therefore "aspirin treats migraine"
+is permitted because "drug" is in the domain for "treats" and "condition"
+(a migraine headache) is in the range for "treats". But "BRCA1 treats schoolbus"
+is not permitted.
+
+First book (../identity-book): *The Typed Graph: How Machine Knowledge Earns Trust*
+Second book (this book): *Knowledge Graphs from Unstructured Text*
+Third book (../bfl-qs-book): *BFS-QL: A Graph Query Protocol for Language Models*
+
+(Writing style guidance is in CLAUDE.md.)
+
+
 ## Foreword: A Manifesto for Machine Knowledge
 
-*This foreword appears in all three volumes of the Graphwright series.*
+*This foreword appears in all three volumes of the Graphwright series. This foreword is already written.*
 
 - **The Stakes** -- Machine reasoning is now deployed in high-stakes domains:
   medicine, law, engineering, spaceflight. The cost of error is real.
@@ -24,7 +41,7 @@
 
 ## Preface
 
-Introduction to LLM hallucination as the motivating problem, knowledge graphs as the solution, and an overview of the book's structure and the two example domains used throughout: `medlit` (medical literature, with authority-backed canonical IDs) and `sherlock` (Sherlock Holmes stories, no external authorities -- a simpler template for non-medical domains). Both are reference implementations in the `kgraph` repo.
+Introduction to LLM hallucination as the motivating problem, *typed* knowledge graphs as the solution, and an overview of the book's structure and the two example domains used throughout: `medlit` (medical literature, with authority-backed canonical IDs) and `sherlock` (Sherlock Holmes stories, no external authorities -- a simpler template for non-medical domains). Both are reference implementations in the `kgraph` repo.
 
 ---
 
@@ -49,6 +66,7 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 ### Chapter 3: What Is a Knowledge Graph, Really?
 
 - **A Working Definition in Four Parts** -- Nodes are entities; edges are typed relationships; every entity has canonical identity; every relationship carries provenance.
+  This is a *typed* knowledge graph as described in the other book (../identity-book).
 - **The Semantics Matter** -- Typed relationships carry meaning; generic labels like "associated with" are nearly useless; the type is the knowledge.
 - **Provenance and the Epistemics of a Fact** -- Claims have epistemological status; provenance records source, method, confidence, and evidence type so downstream systems can weight them appropriately.
 - **Identity: The Hard Problem** -- Canonical identity resolves multiplicity (synonyms, aliases, misspellings) to single nodes and anchors entities to authoritative ontologies.
@@ -79,7 +97,7 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 - **The Prompt as Schema Binding** -- Schema in the prompt (not in model weights) enables rapid iteration, collaborative review with domain experts, and version control.
 - **Handling What Classical Systems Couldn't** -- LLMs handle hedging, negation, implicit relationships, cross-sentence dependencies, and domain jargon far better than classical systems.
 - **The Remaining Limitations, Honestly** -- Hallucination occurs; context windows are finite; cost accumulates; non-determinism complicates reproducibility; LLMs reflect their training distribution.
-- **Why This Moment** -- Model capability (GPT-4 threshold), API accessibility, and tooling ecosystem all matured simultaneously around 2023--present.
+- **Why This Moment** -- Model capability (GPT-4 threshold), API accessibility, and tooling ecosystem all matured simultaneously in the last two or three years.
 - **Domain Generality** -- The same framework handles medical literature (authority-backed canonical IDs, UMLS/HGNC/RxNorm) and literary fiction (domain-minted IDs, no external authority). Swapping domains means swapping the schema and extraction prompts, not the pipeline code.
 
 ### Chapter 7: The Free KG Cases
@@ -109,11 +127,11 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 
 ### Chapter 9: Diagnostic Tools
 
-A good graph visualization is the most valuable diagnostic tool, revealing duplicates, missing connections, and graph structure. Force-directed layout makes structural problems legible before they surface in logs.
+A good graph visualization is a very valuable diagnostic tool, revealing duplicates, missing connections, and graph structure. Force-directed layout makes structural problems legible before they surface in logs.
 
-- **Force-Directed Visualization** -- Nodes laid out by spring forces reveal clusters, bridges, and outliers that tabular output hides; entity types are color-coded; clicking a node shows its full metadata and relationships.
+- **Force-Directed Visualization** -- Nodes laid out by spring forces reveal clusters, bridges, and outliers not apparent in tabular output; entity types are color-coded; clicking a node shows its full metadata and relationships.
 - **What to Look For** -- Duplicate nodes with slight name variations (dedup failures), high-degree hubs that may represent under-specified entity types, disconnected components suggesting extraction gaps, and relationships with low confidence clustered by source.
-- **Visualization as Pipeline Signal** -- Unexpectedly long evidence spans or malformed relationship metadata often surface first as visual anomalies -- a sprawling hub where there should be none, or a cluster of nodes that should have resolved to one.
+- **Visualization as Pipeline Signal** -- Unexpectedly long evidence spans or malformed relationship metadata are often first exposed as visual anomalies -- a sprawling hub where there should be none, or a cluster of nodes that should have resolved to one.
 
 ### Chapter 10: Design Priorities
 
@@ -126,7 +144,7 @@ This chapter examines key design decisions before building, particularly provena
 
 ### Chapter 11: The Identity Server
 
-Shallow treatment -- full architecture is in the companion volume *The Identity Server: Canonical Identity for Knowledge Graphs*.
+Shallow treatment -- full architecture is in the first book, *The Typed Graph: How Machine Knowledge Earns Trust*.
 
 - **Identity Is Load-Bearing** -- Canonical entities with canonical IDs are what separate a useful graph from sophisticated extraction; everything else is in service of identity.
 - **The Pipeline's View** -- The ingest stage calls the identity server as a black box: given a mention and entity type, it returns a stable ID (canonical if an authority matched, provisional otherwise). Provisional IDs are valid graph nodes; the pipeline does not handle them specially.
@@ -134,21 +152,13 @@ Shallow treatment -- full architecture is in the companion volume *The Identity 
 
 ### Chapter 12: The Ingestion Pipeline
 
-- **The Framework's Five Abstractions** -- The `kgraph` pipeline defines five pluggable interfaces, each implemented per domain: `DocumentParserInterface` (raw bytes → structured document), `EntityExtractorInterface` (document → entity mentions), `EntityResolverInterface` (mentions → canonical or provisional entities), `RelationshipExtractorInterface` (document + resolved entities → relationships), and bundle export (entities + relationships → kgbundle format). Domain code implements these; the framework orchestrates them.
-- **Why Two Passes** -- Resolving entities in Pass 1 produces a stable, deduplicated vocabulary before Pass 2 runs. Pass 2 (relationship extraction) refers to canonical entity IDs rather than raw text spans, which improves consistency and enables cross-document linking. Separation also provides isolation, recoverability, and debuggability.
-- **Parsing: Getting to Text** -- Extract structured text from source formats; preserve section boundaries for semantic weight and provenance. (medlit: JATS/PMC XML parser; sherlock: plain text, one document per story.)
-- **Extraction: The LLM Pass** -- At minimum one prompt per document; staging into multiple focused calls is often worth the added complexity. Either way, the prompt must be grounded in the schema -- entity types and predicates injected from the domain spec so the model works within a closed vocabulary.
-  - **What every extraction prompt needs** -- the closed entity-type list; the predicate list with domain/range guidance (to reach for specific predicates over generic ones like `ASSOCIATED_WITH`); corpus vocabulary as preferred names (to suppress surface variation before deduplication); domain instructions for classification edge cases and output format.
-  - **The closed-world constraint** -- every relationship subject and object must be an ID from the entities extracted in the same response. The model cannot assert a relationship involving a participant it didn't also classify and type.
-  - **Staging tradeoffs** -- one combined call is simpler and often sufficient; splitting (entities first, then relationships over the resolved set) reduces hallucination surface at the cost of latency. Ancillary metadata (study design, author affiliations) belongs in separate lightweight calls.
-  - **Required output contract** -- per entity: local ID, type, surface name, synonyms, authority ID hints; per relationship: subject ID, predicate, object ID, evidence span ID, confidence, linguistic trust (`asserted` / `suggested` / `speculative`); per evidence span: passage text, section, paragraph index.
-  - **Example prompt** -- Appendix A shows an abstracted version of the medlit extraction prompt, illustrating how entity types, predicates, and vocabulary slot into a Jinja2 template. A starting point for readers implementing their own schema.
-- **Vocabulary: Building a Shared Terminology** -- Optional dedicated pass (`fetch_vocab` in medlit) that builds a shared vocabulary and injects it into extraction for consistency across papers. Not framework-level; a medlit-specific optimization for large corpora.
-- **Deduplication** -- Group mentions, resolve to canonical forms; the synonym cache handles most cases; embedding similarity (cosine, via the `EmbeddingGeneratorInterface`) handles residue.
-- **Assembly and Bundle Export** -- Merge per-document extractions; aggregate evidence across sources; export to kgbundle format (manifest + `entities.jsonl` + `relationships.jsonl`). The bundle is the contract between the ingestion pipeline and the query layer; both sides are versioned against the `kgbundle` schema.
-- **Progress Tracking and Resumability** -- Design for large-scale runs that fail partway; checkpointing and resumability prevent restart overhead. (medlit uses per-paper JSON artifact files written atomically with write-then-rename; a Postgres work queue with `SKIP LOCKED` distributes work across parallel workers.)
-- **Concurrency Model** -- Each pipeline stage has its own concurrency limit; stages are bottlenecked independently. The work queue approach (one row per document, `SELECT ... FOR UPDATE SKIP LOCKED`) allows multiple workers to claim and process documents without coordination overhead.
-- **medlit Concrete Stages** -- Fetch (download PMC XML), Extract (entity pass), Ingest (relationship pass + identity resolution), Build Bundle; each a Python module invoked via `uv run`. The sherlock pipeline is simpler (no fetch, no authority lookup) but uses the same interface structure.
+- **The Framework's Five Abstractions** -- Parser, entity extractor, entity resolver, relationship extractor, and bundle export; each a pluggable interface implemented per domain. Domain code implements these; the framework orchestrates them.
+- **Why Two Passes** -- Resolving entities first produces a stable vocabulary before relationship extraction runs, enabling cross-document linking and making each pass independently debuggable and recoverable.
+- **Parsing: Getting to Text** -- Extract structured text from source formats; preserve section boundaries for semantic weight and provenance.
+- **Extraction: The LLM Pass** -- The prompt binds entity types and predicates from the domain spec, enforces a closed-world constraint (relationships may only reference entities extracted in the same response), and requires structured output with confidence and linguistic trust. Details and a worked example in Appendix A.
+- **Deduplication** -- Group mentions, resolve to canonical forms; an optional vocabulary pre-pass reduces surface variation before deduplication runs; embedding similarity handles residue.
+- **Assembly and Bundle Export** -- Merge per-document extractions; aggregate evidence across sources; export to a versioned bundle format that is the contract between the ingestion pipeline and the query layer.
+- **Progress Tracking and Resumability** -- Design for large-scale runs that fail partway; each document tracks its own status; durable per-document artifacts allow restart without re-fetching or re-paying LLM costs.
 
 ---
 
@@ -161,9 +171,8 @@ Shallow treatment -- full architecture is in the companion volume *The Identity 
 - **Graph Visualization** -- Force-directed visualization reveals structure, clusters, bridges, and outliers better than tabular output.
 - **Grounding LLM Inference** -- Instead of asking the model to remember, give it retrieved graph to reason over; shifts from "hallucination" to "synthesis from sources."
 - **MCP as the Integration Point** -- Model Context Protocol makes the graph a discoverable, queryable, active participant in agentic reasoning.
-- **BFS Queries** -- Breadth-first search query language designed for LLM friendliness; topology and presentation are orthogonal.
+- **BFS Queries** -- Breadth-first search query language designed for LLM friendliness; topology and presentation are orthogonal. Refer to third book.
 - **Hypothesis Generation** -- Traverse the graph to surface candidates (drug-disease pairs, structural analogies, gap-based suggestions) for human evaluation.
-- **Should Hypothesis Generation Be Baked In?** -- Framework should provide primitives (traversal, similarity, subgraph queries); domain code interprets what's interesting.
 - **Returning to the Dream** -- The vision of machines reasoning over explicit knowledge is finally reachable; the representation was the bottleneck.
 
 ### Chapter 14: The Augmented Researcher
@@ -173,27 +182,19 @@ Shallow treatment -- full architecture is in the companion volume *The Identity 
 - **Linguistic and Geographic Blind Spots** -- Graphs built from diverse corpora surface work citation networks systematically hide; particularly valuable for rare diseases and regional research.
 - **The Robot Scientist** -- Adam reasoned over a knowledge graph of yeast biology, formed hypotheses, ran experiments, and confirmed results -- autonomously. Eve extended the pattern to drug discovery. The bottleneck wasn't capability; it was that building the knowledge representation required a team of domain experts working by hand. That bottleneck is gone.
 
-### Chapter 15: Who Benefits, Who Decides
+### Chapter 15: Consequences
 
 - **Democratization and Its Limits** -- Building remains resource-intensive, but technology enables democratization if policy and incentives align.
 - **Compressed Discovery Timelines** -- The knowledge synthesis bottleneck becomes quicker; research pace accelerates in drug discovery, rare disease, and materials science.
 - **The Rare Disease Problem** -- Small communities can't synthesize full literature; graphs serve as coordination and knowledge synthesis mechanisms.
 - **Credit, Priority, and Provenance** -- When machines surface connections, credit attribution and scientific priority depend on provenance tracking; technical choices have ethical implications.
 - **Who Owns the Graph** -- Open versus proprietary carries consequences for the scientific commons; the governance question mirrors GenBank and clinical trial data tensions.
-
-### Chapter 16: The Inference You Didn't Intend
-
-- **The Architecture of Expertise** -- Knowledge graphs capture the deep structure of expert understanding; systems reasoning over them have access to that architecture.
 - **Capability Is Not Bounded by Intent** -- Rich, structured, provenance-tracked knowledge enables inferences builders didn't anticipate; capability transcends intended use.
 - **Dual Use at Graph Scale** -- The same facts support both beneficial and harmful applications; responsible practice requires access control, provenance transparency, logging, and auditability.
 - **Bias at Scale** -- Graphs encode and amplify source biases; diverse sourcing and provenance transparency help but don't eliminate the problem.
 - **The Epistemic Responsibility of the Builder** -- Builders owe honesty about limits, infrastructure for verification, and consideration of foreseeable consequences.
-
-### Chapter 17: What's Next
-
 - **Open Problems** -- Very long documents, multi-hop reasoning during extraction, real-time updating, and schema evolution without re-extraction remain challenging.
 - **Where the Field Is Going** -- LLMs will change; the need for this grounding layer is permanent; RAG and structured world models converge on the same architectural insight.
-- **An Invitation** -- The extraction bottleneck held for 50 years; it's now breakable; this opens the capability to build cross-domain knowledge synthesis at scale.
 
 ---
 
