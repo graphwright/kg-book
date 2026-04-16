@@ -142,7 +142,7 @@ A simple knowledge graph: nodes represent entities, edges represent typed relati
 
 This book builds its argument around a concrete project: a knowledge graph for medical literature, available at https://github.com/wware/kgraph. The project is the worked example throughout the book -- when the engineering chapters describe extraction pipelines, identity servers, and graph serving, that is the code they are describing.
 
-The project has four components: `kgraph`, the domain-agnostic core for building, bundling, and managing a knowledge graph; `kgserver`, which accepts a bundle and exposes it as a graph visualization, a chatbot, and a set of REST/GraphQL API endpoints; `kgschema`, a domain-agnostic schema layer designed to be extended for specific domains; and `examples/medlit`, the medical literature implementation with its parsing, extraction, and identity resolution against biomedical ontologies. MCP serving\index{model context protocol} is handled by `bfs-ql`, a companion library that wraps any graph backend and exposes it as four MCP tools an LLM can use to traverse and reason over the graph.
+The project has three core components: `kgraph`, the domain-agnostic framework for building, bundling, and managing a knowledge graph; `kgschema`, a domain-agnostic schema layer designed to be extended for specific domains; and `examples/medlit`, the medical literature implementation with its parsing, extraction, and identity resolution against biomedical ontologies. The built graph is exported as a bundle (kgbundle format) that a query layer can load and serve via REST, MCP, or a force-directed visualization.
 
 The gist of this book (beyond providing a lot of how-to information) is that a knowledge graph in some form is
 
@@ -698,41 +698,17 @@ If you do need provenance at query time, design for it from the start. The query
 
 `\chaptermark{The Identity Server}`{=latex}
 
-The identity server\index{identity server} is the authoritative component for entity identity across the knowledge graph. It handles the full lifecycle of an entity's identity: resolving a mention to an ID, promoting a provisional entity to canonical status, detecting synonyms, and merging duplicates into a single survivor. The full architecture — including the domain plugin contract, Docker deployment, caching strategy, and reference implementation — is covered in the companion volume *The Identity Server: Canonical Identity for Knowledge Graphs*. This chapter describes what the pipeline needs to know about calling it.
+The identity server\index{identity server} is the component responsible for entity identity across the knowledge graph: resolving a mention to a canonical ID, tracking provisional entities until they can be confirmed, detecting synonyms, and merging duplicates. Its full architecture -- domain plugin contract, authority lookup chain, synonym cache, promotion policy, Docker deployment -- is covered in the companion volume *The Identity Server: Canonical Identity for Knowledge Graphs*. This chapter covers only what the ingestion pipeline needs to know about calling it.
 
 ### Identity Is Load-Bearing\index{entity resolution}\index{canonical entity}
 
-Canonical entities with canonical IDs are the design decision that most separates a useful knowledge graph from a sophisticated extraction exercise. Everything else in the pipeline -- extraction, schema design, provenance tracking -- is in service of this. Without it, you have a collection of mentions that look like a graph but don't support the reasoning you want. With it, you have a structure where "this drug treats this disease" means the same thing whether it came from a 2010 review article or a 2024 clinical trial, because both references resolve to the same nodes.
-
-The intuition is simple: a knowledge graph is useful when you can ask "what do we know about X?" and get an answer that aggregates across all sources. That aggregation only works if "X" is the same X everywhere. If one paper calls it "BRCA1," another "breast cancer type 1 susceptibility protein," and a third "the gene encoding the protein that interacts with BARD1," and your graph treats these as three different entities, you've lost the ability to reason. The relationships are there, but they're attached to fragments of an entity rather than the entity itself. Identity resolution is the process of collapsing that multiplicity into something a reasoning system can actually use.
+Canonical entities with canonical IDs are the design decision that most separates a useful knowledge graph from a sophisticated extraction exercise. Without identity resolution, you have a collection of mentions that look like a graph but don't support cross-document reasoning. With it, "Drug A treats Disease B" means the same thing whether it came from a 2010 review article or a 2024 clinical trial, because both assertions resolve to the same nodes.
 
 ### The Pipeline's View
 
-The ingestion pipeline calls the identity server as a black box. After the LLM extraction pass produces raw mentions, the ingest stage calls `resolve(mention, entity_type)` for each one and receives back a stable ID — canonical if an authority matched, provisional otherwise. The pipeline stores that ID in the relationship record and moves on. It does not need to know about the lookup chain, the domain service, or the caching strategy.
+The ingestion pipeline calls the identity server as a black box. After the LLM extraction pass produces raw mentions, the ingest stage calls `resolve(mention, entity_type)` for each one and receives back a stable ID -- canonical if an authority matched, provisional otherwise. Provisional IDs are valid graph nodes: relationships referencing them are valid edges and evidence accumulates against them through any later promotion or merge. The pipeline does not handle provisional entities specially.
 
-Provisional IDs are valid graph nodes. Relationships referencing them are valid edges. Evidence accumulates against provisional entities and is preserved through any later promotion or merge. The pipeline does not need to handle provisional entities specially.
-
-Provenance-derived entities — papers, authors, citations from document metadata — enter with their canonical ID already known (a PMC ID, an ORCID) and are passed directly to the identity server with that ID set. The identity server short-circuits the lookup chain and uses the provided ID directly.
-
-### Provenance-Derived Entities and the Citation Graph
-
-Not all entities in the graph come from LLM extraction. Some are derived from document metadata and structure, without touching the model at all. These *provenance-derived* entities are more reliable than extracted ones -- they come from authoritative structured fields in the source document rather than from LLM interpretation of prose -- and they carry their own class of relationships that are worth treating specially.
-
-In medlit, each ingested paper automatically contributes a set of provenance-derived entities and relationships:
-
-- **Paper** entities (one per ingested document, with its PMC ID as canonical ID)
-- **Author** entities (one per credited author)
-- **Institution** entities (one per author affiliation)
-- `AUTHORED(Author, Paper)` relationships
-- `AFFILIATED_WITH(Author, Institution)` relationships
-- `DESCRIBED(Paper, entity)` relationships linking each paper to the domain entities most central to it
-- `CITES(Paper, Paper)` relationships derived from the paper's reference list
-
-The `CITES` relationships deserve particular attention. Scientific papers include a structured reference list -- in JATS XML,\index{JATS XML} the `<ref-list>` element -- that names every paper they cite, often with a PMC ID. These citations are parsed directly from the XML and turned into `CITES` edges in the graph, no LLM required. Each cited paper that appears in the reference list becomes a `Paper` entity in the graph, and its outgoing `CITES` edge is asserted with confidence 1.0. This is reliable provenance: the citation relationship is a fact recorded by the authors, not an inference by an extraction model.
-
-The citation graph produced this way is valuable in its own right. It surfaces the intellectual neighborhood of your corpus: which papers cite which, which papers are frequently cited, which are co-cited. Papers that are cited by many papers in your corpus but not yet ingested themselves become natural candidates for corpus expansion -- the reference list is a built-in discovery mechanism for related literature.
-
-There is one practical gap: a cited paper that has not been ingested is a stub -- a `Paper` entity with a PMC ID as its canonical identifier but only that ID as its name, since no extraction has run on it. Resolving this is straightforward: NCBI's `esummary` API accepts batches of PMC IDs and returns titles, making it possible to populate the `name` field for all stub papers in a single pass of five or so HTTP requests regardless of how many citations are in the corpus. This is much faster than ingesting each paper, and title resolution is all you need for the citation graph to be human-readable.
+Papers, authors, and citations from document metadata enter with their canonical ID already known (a PMC ID, an ORCID) and bypass the lookup chain entirely. The citation graph this produces -- `CITES(Paper, Paper)` edges derived directly from reference lists, confidence 1.0 -- is a built-in corpus expansion mechanism: frequently cited papers not yet ingested become natural candidates for the next ingest run.
 
 ## Chapter 12: The Ingestion Pipeline
 
@@ -749,7 +725,7 @@ The medlit batch pipeline uses four stages, each with its own script and a well-
 1. **Vocabulary** (`fetch_vocab`): LLM pass over all papers to build a shared vocabulary of canonical entity names and their aliases. Output: `vocab.json` and a seeded synonym cache.
 2. **Extract** (`extract`): LLM entity and relationship extraction for each paper, using the vocabulary as context. Output: per-paper `paper_*.json` artifact files in the `extracted/` directory.
 3. **Ingest** (`ingest`): Identity-server-based deduplication and canonical ID assignment across all extracted bundles. Output: `entities.json`, `relationships.json`, and an ID map in `merged/`.
-4. **Build bundle** (`build_bundle`): Assembles the kgbundle -- the loadable artifact consumed by kgserver. Fetches titles for cited papers from NCBI `esummary`. Output: `entities.jsonl`, `relationships.jsonl`, and supporting files in `bundle/`.
+4. **Build bundle** (`build_bundle`): Assembles the kgbundle -- the loadable artifact for the query layer. Fetches titles for cited papers from NCBI `esummary`. Output: `entities.jsonl`, `relationships.jsonl`, and supporting files in `bundle/`.
 
 That ordering matters. You need a consistent entity vocabulary before extraction can use it. You need resolved entity IDs before you can aggregate relationships across documents. And you need the aggregated merged output before you can build the final bundle. Other orderings are possible, but the principle holds: separate concerns, make each pass debuggable, design for partial failure and restart.
 
@@ -771,7 +747,7 @@ This is where your schema meets the text. The extraction prompt is not a generic
 
 **Required output contract.** Per entity: a local ID (stable within the response), entity type, surface name, synonyms, and any authority ID hints the model can infer. Per relationship: subject ID, predicate, object ID, evidence span ID, confidence, and linguistic trust (`asserted` / `suggested` / `speculative`). Per evidence span: passage text, section name, and paragraph index. The linguistic trust field is what allows downstream consumers to weight hedged claims differently from direct assertions. It is worth requiring it from the start rather than retrofitting -- provenance is painful to add after a pipeline is in production.
 
-The prompt is the place where domain expertise gets translated into extraction behavior. A clinician reviewing a well-written prompt should be able to assess whether it captures the domain correctly. Schema changes -- adding an entity type, splitting a predicate into two more specific ones -- require editing the prompt, not retraining a model. Iteration over the prompt is the design method: run extraction on a sample, inspect the output, adjust, repeat. Appendix B shows an abstracted version of the medlit extraction prompt, illustrating how entity types, predicates, linguistic trust, and the closed-world constraint slot into a template.
+The prompt is the place where domain expertise gets translated into extraction behavior. A clinician reviewing a well-written prompt should be able to assess whether it captures the domain correctly. Schema changes -- adding an entity type, splitting a predicate into two more specific ones -- require editing the prompt, not retraining a model. Iteration over the prompt is the design method: run extraction on a sample, inspect the output, adjust, repeat. Appendix A shows an abstracted version of the medlit extraction prompt, illustrating how entity types, predicates, linguistic trust, and the closed-world constraint slot into a template.
 
 ### Vocabulary: Building a Shared Terminology\index{vocabulary pass}
 
@@ -803,40 +779,17 @@ Design for restartability\index{restartability} from the beginning. Each documen
 
 The concepts above translate directly into four implementation commitments.
 
-**Dedup-on-write.** The `IdentityServer` resolves entity identity and detects synonyms incrementally as each entity is written. There is no global deduplication pass over the corpus; papers can be ingested concurrently and the identity server handles merging correctly under concurrent access.
+**Dedup-on-write.** Identity resolution and synonym detection happen incrementally as each entity is written; there is no global deduplication pass over the corpus. Papers can be ingested concurrently.
 
 **Per-paper atomicity.** Each paper moves through stages independently. A failure at any stage leaves the paper at its last committed status; the next available worker picks it up and retries. No paper's failure affects any other.
 
-**Durable checkpoints.** Raw fetched text and raw LLM extraction output are stored durably before any graph writes. This means a schema change, extraction bug, or infrastructure failure can be recovered from without re-fetching or re-paying LLM costs.
+**Durable checkpoints.** Raw fetched text and raw LLM extraction output are stored durably before any graph writes. A schema change, extraction bug, or infrastructure failure can be recovered from without re-fetching or re-paying LLM costs.
 
 **Shared pipeline code.** The MCP tool and the batch runner call the same stage functions. There is no separate implementation for interactive versus batch use.
 
-### Stages
-
-#### 1. Fetch
-
-Retrieves raw text or XML for a PMC ID from the PMC API and stores it in `ingest_jobs.raw_text`. This stage is pure I/O and completely independent of all other work. A previously fetched paper never needs to be re-fetched.
-
-#### 2. Extract
-
-Runs the LLM extraction call for a paper. Before calling the LLM, the worker queries the live graph for the most frequent entities of each relevant type and injects them as context. This keeps extraction consistent across workers and across time — the context improves as the corpus grows.
-
-The raw LLM output is stored in `ingest_jobs.raw_extraction` and also written to a paper artifact file (see below) before any graph writes occur.
-
-#### 3. Ingest
-
-Writes entities and relationships from `raw_extraction` to the graph. For each entity:
-
-1. `identity_server.resolve(mention, context)` — returns a canonical or provisional entity ID, creating one if needed, idempotently.
-2. `identity_server.on_entity_added(entity_id, context)` — triggers synonym detection and merge.
-
-Both calls happen **inside the same transaction as the entity insert**, so synonym detection fires only after the row is durably committed and visible. This prevents the race where two concurrent workers see each other as merge candidates before either insert completes.
-
-Relationship writes are in the same transaction as the entity inserts for the paper. There is no gap between them.
-
 ### Work Queue, Artifact Files, and Reference Implementation
 
-The medlit implementation uses Postgres as a work queue (via `SKIP LOCKED` for distributed job claiming), per-paper artifact files for durability and retraction support, and a shared set of pipeline functions used by both the batch CLI and the MCP tool. The full SQL schema, shell invocations, Python snippets, and extraction output JSON format are in Appendix B.
+The medlit implementation uses Postgres as a work queue (via `SKIP LOCKED` for distributed job claiming), per-paper artifact files for durability and retraction support, and a shared set of pipeline functions used by both the batch CLI and the MCP tool. The full SQL schema, shell invocations, Python snippets, and extraction output JSON format are in Appendix A.
 
 # Part IV: What It Makes Possible
 
@@ -848,9 +801,9 @@ The value of the graph is in what grounded reasoning becomes possible, not in th
 
 ### The Server Is Not the Point
 
-This chapter is about what becomes possible once your graph exists, not about how to build a particular server. The medlit project has a serving layer -- kgserver for REST, GraphQL, visualization, and chatbot, and bfs-ql for MCP. You might build something like it, or you might expose your graph through a completely different interface, or you might not serve it externally at all. The infrastructure choices are yours. What this chapter is really about is the capability space: what can a well-constructed knowledge graph actually do for someone?
+This chapter is about what becomes possible once your graph exists, not about how to build a particular serving layer. You might expose your graph through a REST API, an MCP server, a force-directed visualization, or no server at all -- just load the bundle into memory and run Python scripts against it. The infrastructure choices are yours. What this chapter is really about is the capability space: what can a well-constructed knowledge graph actually do for someone?
 
-That distinction matters because it's easy to conflate "I have a graph" with "I have a graph server." The graph is the data structure and the relationships it encodes. The server is one way to expose it. You could serve the same graph through a REST API, a GraphQL endpoint, an MCP server, a SPARQL endpoint, a custom query language, or no server at all -- just load it into memory and run Python scripts against it. The capabilities we're about to describe -- direct querying, visualization, grounding LLMs, hypothesis generation -- are capabilities of the graph. The server is a delivery mechanism. Choose one that fits your users and your deployment constraints; don't let the choice of server obscure what the graph itself enables.
+That distinction matters because it's easy to conflate "I have a graph" with "I have a graph server." The graph is the data structure and the relationships it encodes. The serving layer is one way to expose it. The capabilities we're about to describe -- direct querying, visualization, grounding LLMs, hypothesis generation -- are capabilities of the graph. The serving layer is a delivery mechanism. Choose one that fits your users and your deployment constraints; don't let the choice obscure what the graph itself enables.
 
 ### Direct Querying
 
@@ -888,7 +841,7 @@ If you decide not to use MCP, the graph still needs to be queryable by whatever 
 
 The medlit implementation uses a JSON-based breadth-first search query language designed for LLM friendliness and context-window efficiency. The key design insight is that topology and presentation are orthogonal: BFS from seed nodes determines *which* nodes and edges are in the subgraph, while node and edge filters control only how much metadata each item carries in the response. Non-matching items appear as stubs rather than being omitted, so the LLM always sees an accurate picture of the graph's shape.
 
-The full query format, response format, field reference, worked examples, and LLM prompt template are in Appendix A.
+The full query format, response format, field reference, worked examples, and LLM prompt template are in the companion volume *BFS-QL: Graph Queries for Language Models*.
 
 ### Hypothesis Generation
 
@@ -1054,234 +1007,11 @@ Adam existed. A robot scientist that could reason over a knowledge graph, form h
 
 What follows from that is genuinely unclear. The honest position is that we don't know what happens when the synthesis capability that has always been limited to unusually well-read human experts becomes available at the scale of the full published literature, across domains, continuously updated. The history of science suggests that moments when the cost of synthesis drops dramatically tend to produce results that weren't predicted in advance. The tools are here. The territory ahead is large and largely unmapped.
 
-# Appendix A: BFS Query Language Reference
-
-`\chaptermark{BFS Query Language}`{=latex}
-
-The BFS query\index{breadth-first search (BFS)} provides a single, general-purpose mechanism for retrieving subgraphs from the knowledge graph. It is designed to be constructed easily by an LLM while minimizing unnecessary context window consumption in the response.
-
-The design separates two orthogonal concerns:
-
-- **Topology**: BFS from one or more seed nodes up to a specified hop depth defines which nodes and edges are included in the subgraph. Filtering has no effect on this.
-- **Presentation**: Node and edge filters determine which items in that subgraph receive full metadata vs. a minimal stub. This is purely a serialization decision applied after the subgraph is computed.
-
-Stub items carry only enough information to understand the graph's topology without consuming context on irrelevant details. The LLM sees the full shape of the neighborhood while receiving rich data only where it matters.
-
-## Query Format
-
-```json
-{
-  "seeds":         ["<entity_id>", ...],
-  "max_hops":      <int>,
-  "node_types":    ["<type>", ...],
-  "predicates":    ["<predicate>", ...],
-  "topology_only": <bool>
-}
-```
-
-| Field | Required | Description |
-|---|---|---|
-| `seeds` | Yes | Array of one or more canonical entity IDs to use as BFS starting points. All seeds are expanded simultaneously; the result is the union of their neighborhoods. |
-| `max_hops` | Yes | Maximum graph distance from any seed node. Values of 1–3 are typical; larger values may return very large subgraphs. |
-| `node_types` | No | List of entity type names. Matching nodes receive full metadata; non-matching nodes appear as stubs. Omit to receive full data on all nodes. |
-| `predicates` | No | List of predicate names. Matching edges receive full metadata including provenance; non-matching edges appear as stubs. Omit to receive full data on all edges. |
-| `topology_only` | No | Boolean (default false). When true, suppresses all metadata: every node is returned as a bare `{id, entity_type}` stub and every edge as a bare `{subject, predicate, object}` triple. Overrides `node_types` and `predicates`. Use this as the first query on a large or unfamiliar graph to survey structure cheaply before requesting metadata. |
-
-- If `node_types` is omitted entirely, all nodes in the subgraph receive full data.
-- If `predicates` is omitted entirely, all edges receive full data including provenance.
-- Omitting both is appropriate for small subgraphs or debugging, but will produce large responses on dense neighborhoods.
-- `topology_only=true` is the recommended first move on a large or unfamiliar graph: returns the complete structural skeleton at minimum token cost.
-- Multiple seeds are useful when you want to explore the shared neighborhood of several entities simultaneously -- for example, finding publications co-authored by two researchers, or finding diseases connected to a set of genes.
-- If you do not yet have a canonical entity ID, call `search_entities()` first to resolve a name to an ID.
-
-## Response Format
-
-```json
-{
-  "seeds": ["<entity_id>", ...],
-  "max_hops": 2,
-  "node_count": <int>,
-  "edge_count": <int>,
-  "nodes": [
-    {
-      "id": "<entity_id>",
-      "entity_type": "<type>",
-      "<additional fields>": "..."
-    }
-  ],
-  "edges": [
-    {
-      "subject": "<entity_id>",
-      "predicate": "<predicate>",
-      "object": "<entity_id>",
-      "<additional fields>": "..."
-    }
-  ]
-}
-```
-
-_Full Node_
-
-A node whose `entity_type` matches `node_types` (or when no filter is specified) includes all available metadata:
-
-```json
-{
-  "id": "PUB:PMC2386281",
-  "entity_type": "Publication",
-  "title": "The Diagnosis of Cushing's Syndrome",
-  "canonical_id": "PMID:18493314",
-  "year": 2008,
-  "journal": "Reviews in Endocrine and Metabolic Disorders",
-  "authors": ["Stewart PM"],
-  "abstract_snippet": "..."
-}
-```
-
-_Stub Node_
-
-A node that does not match `node_types` appears as a stub with only identity information:
-
-```json
-{
-  "id": "PERSON:67890",
-  "entity_type": "Person"
-}
-```
-
-_Full Edge_
-
-An edge whose `predicate` matches `predicates` (or when no filter is specified) includes all provenance and metadata:
-
-```json
-{
-  "subject": "PERSON:12345",
-  "predicate": "AUTHORED",
-  "object": "PUB:PMC2386281",
-  "confidence": 0.97,
-  "provenance": [
-    {
-      "source_doc": "PMC2386281",
-      "section": "metadata",
-      "method": "structured_extraction",
-      "evidence_type": "primary_authorship"
-    }
-  ]
-}
-```
-
-_Stub Edge_
-
-An edge that does not match `predicates` appears with topology only:
-
-```json
-{
-  "subject": "PERSON:12345",
-  "predicate": "COLLEAGUE_OF",
-  "object": "PERSON:67890"
-}
-```
-
-## LLM Prompt Template
-
-The following can be included in a system prompt or tool description to instruct an LLM how to construct BFS queries.
-
-To explore the knowledge graph, call `bfs_query()` with a JSON body. The query performs a breadth-first search from one or more seed nodes and returns the resulting subgraph.
-
-Nodes and edges in the subgraph are either **full** (all metadata and provenance included) or **stub** (identity only), depending on the filters you specify. Filtering affects only what data is returned, not which nodes and edges are included in the subgraph.
-
-**If you do not yet have a canonical entity ID, call `search_entities()` first.**
-
-_Query structure_
-
-```json
-{
-  "seeds":         ["<id>", ...],  // one or more starting entity IDs
-  "max_hops":      <int>,          // graph distance from seeds (1-3 recommended)
-  "node_types":    [...],          // optional: entity types that get full data
-  "predicates":    [...],          // optional: predicates that get full data + provenance
-  "topology_only": <bool>          // optional: true = bare IDs/types only, no metadata
-}
-```
-
-Stub nodes contain only `{id, entity_type}`. Stub edges contain only `{subject, predicate, object}`. Omitting `node_types` or `predicates` returns full data for all nodes or edges respectively. Use `topology_only: true` as the first query on a large or unfamiliar graph to survey structure at minimum token cost.
-
-_Example 1: Find an author's publications with provenance_
-
-You know Dr. Stewart's entity ID and want to retrieve her publications along with the evidence that links her to each one. You don't need full metadata on other entities in the neighborhood.
-
-```json
-{
-  "seeds":      ["PERSON:12345"],
-  "max_hops":   1,
-  "node_types": ["Publication"],
-  "predicates": ["AUTHORED"]
-}
-```
-
-Result: Full data on Publication nodes, full provenance on AUTHORED edges. Any other nodes or edges at hop 1 (e.g. institutional affiliations) appear as stubs.
-
-_Example 2: Explore a disease neighborhood, focusing on drugs_
-
-You want to understand what drugs are connected to Cushing's syndrome\index{Cushing's syndrome} within two hops, without being overwhelmed by the full metadata of every gene, symptom, and pathway in the neighborhood.
-
-```json
-{
-  "seeds":      ["MeSH:D003480"],
-  "max_hops":   2,
-  "node_types": ["Drug"]
-}
-```
-
-Result: Full data on Drug nodes. All other node types (Disease, Gene, Symptom, etc.) appear as stubs. All edges appear as stubs since no `predicates` filter targets specific predicates -- you can see the topology of the neighborhood without consuming context on provenance you haven't asked for.
-
-_Example 3: Find shared connections between two entities_
-
-You want to explore what two researchers have in common -- shared publications, shared diseases they've written about, or shared collaborators -- within two hops of either of them.
-
-```json
-{
-  "seeds":      ["PERSON:12345", "PERSON:67890"],
-  "max_hops":   2,
-  "node_types": ["Publication", "Disease"],
-  "predicates": ["AUTHORED", "DISCUSSES"]
-}
-```
-
-Result: BFS expands from both researchers simultaneously. The returned subgraph is the union of both neighborhoods. Full data on Publications and Diseases they connect to; full provenance on AUTHORED and DISCUSSES edges. Everything else is stubbed. Nodes reachable from both seeds appear once, making shared connections directly visible.
-
-## Design Considerations
-
-_Topology and presentation are orthogonal_
-
-The subgraph returned by a BFS query is determined entirely by `seeds` and `max_hops`. Filters have no effect on which nodes or edges are included -- they only control how much data each item carries in the response. This means the LLM always sees an accurate picture of the graph's topology, regardless of what it filtered for. A stub node is not a missing node; it is a node whose full metadata was not requested.
-
-_Why stubs rather than omission_
-
-Omitting non-matching nodes entirely would produce a misleading picture of the graph. If Dr. Jones appears as a stub rather than disappearing, the LLM knows that Stewart has a connection to another person in the graph, and can issue a follow-up query for Jones if needed. Omission would make the graph appear sparser than it is, causing the LLM to miss connections it doesn't know to ask about.
-
-_Edge provenance is expensive context_
-
-A single edge with strong multi-source support may carry a long provenance list -- source documents, confidence scores, evidence types, extraction methods. Returning full provenance on every edge in a two-hop neighborhood would dominate the context window on most queries. The `predicates` filter gives the LLM precise control over where that cost is paid.
-
-_Multiple seeds enable relational queries_
-
-Accepting an array of seeds rather than a single seed allows the LLM to express relational questions -- "what do these entities have in common?" -- without requiring a specialized query type. The union semantics are simple to implement and simple to reason about.
-
-_Filters are independently optional_
-
-`node_types` and `predicates` compose independently. You can request full node data with stub edges (useful when you want entity details but not provenance), full edge provenance with stub nodes (useful when you want to audit support for a relationship without loading entity metadata), both (for focused high-detail queries), or neither (for small graphs or debugging). When neither filter is specified, `topology_only: true` is the most efficient option. No special cases are required.
-
-_BFS depth guidance_
-
-Depth 1 is appropriate for direct relationships: an author's publications, a drug's known indications, a gene's associated diseases. Depth 2 surfaces indirect connections: diseases associated with genes that a drug targets, co-authors of papers a researcher has written. Depth 3 and beyond can return very large subgraphs on well-connected nodes and should be used with targeted filters. When in doubt, start at depth 1 and increase.
-
-# Appendix B: Reference Implementation Notes
+# Appendix A: Reference Implementation Notes
 
 `\chaptermark{Reference Implementation}`{=latex}
 
 This appendix documents implementation details of the medlit reference project: the ingestion pipeline's work queue, artifact files, parallelism, and shared code. These details are specific to one implementation and will evolve; the principles behind them are in Chapters 11 and 12.
-
-The identity server's full specification — including the Python ABC, domain-pluggable behaviour, entity status rules, idempotency contract, Postgres schema, and Docker deployment — is in the companion volume *The Identity Server: Canonical Identity for Knowledge Graphs*, Appendix A and B.
 
 ## Ingestion Pipeline: Work Queue
 
@@ -1348,7 +1078,8 @@ The artifact directory can be a local volume, NFS mount, or S3-compatible store.
 **Repopulation from artifacts:**
 
 ```bash
-python -m kgserver.ingest --from-artifacts ./artifacts/ --ingest-workers 16
+python -m medlit.scripts.ingest \
+    --from-artifacts ./artifacts/ --ingest-workers 16
 ```
 
 Reads `paper_*.json` from the directory, inserts each into `ingest_jobs` with the appropriate status and fields populated from the file (`INSERT ... ON CONFLICT DO NOTHING` skips papers already in the table), then lets the normal worker pool handle the rest.

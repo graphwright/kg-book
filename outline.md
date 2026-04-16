@@ -24,7 +24,7 @@
 
 ## Preface
 
-Introduction to LLM hallucination as the motivating problem, knowledge graphs as the solution, and an overview of the book's structure and the `kgraph`/`medlit` example project.
+Introduction to LLM hallucination as the motivating problem, knowledge graphs as the solution, and an overview of the book's structure and the two example domains used throughout: `medlit` (medical literature, with authority-backed canonical IDs) and `sherlock` (Sherlock Holmes stories, no external authorities -- a simpler template for non-medical domains). Both are reference implementations in the `kgraph` repo.
 
 ---
 
@@ -79,7 +79,8 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 - **The Prompt as Schema Binding** -- Schema in the prompt (not in model weights) enables rapid iteration, collaborative review with domain experts, and version control.
 - **Handling What Classical Systems Couldn't** -- LLMs handle hedging, negation, implicit relationships, cross-sentence dependencies, and domain jargon far better than classical systems.
 - **The Remaining Limitations, Honestly** -- Hallucination occurs; context windows are finite; cost accumulates; non-determinism complicates reproducibility; LLMs reflect their training distribution.
-- **Why This Moment** -- Model capability (GPT-4 threshold), API accessibility, and tooling ecosystem all matured simultaneously around 2023–present.
+- **Why This Moment** -- Model capability (GPT-4 threshold), API accessibility, and tooling ecosystem all matured simultaneously around 2023--present.
+- **Domain Generality** -- The same framework handles medical literature (authority-backed canonical IDs, UMLS/HGNC/RxNorm) and literary fiction (domain-minted IDs, no external authority). Swapping domains means swapping the schema and extraction prompts, not the pipeline code.
 
 ### Chapter 7: The Free KG Cases
 
@@ -100,6 +101,7 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 - **Provenance as a First-Class Schema Concern** -- Provenance design affects all downstream phases; source, method, confidence, and evidence type should be captured from the start.
 - **Designing for Extraction** -- Some relationship types are easy to extract; others are not; schema and extraction prompt should co-evolve.
 - **Designing for Evolution** -- Schemas will change; versioning and single-source-of-truth modules reduce drift and migration pain.
+- **The Single Source of Truth Module** -- Entity types, predicates, prompt instructions, and vocabulary guidance belong in one module (e.g. `domain_spec.py`); the extraction prompt, validation logic, and dedup all import from it. One edit propagates everywhere; no drift between prompt and schema.
 
 ---
 
@@ -107,7 +109,11 @@ Introduction to LLM hallucination as the motivating problem, knowledge graphs as
 
 ### Chapter 9: Diagnostic Tools
 
-A good graph visualization is the most valuable diagnostic tool, revealing duplicates, missing connections, and graph structure. Search, entity coloring, traversal controls, statistics, relationship labels, and interactive details enable inspection of extraction quality and graph coherence.
+A good graph visualization is the most valuable diagnostic tool, revealing duplicates, missing connections, and graph structure. Force-directed layout makes structural problems legible before they surface in logs.
+
+- **Force-Directed Visualization** -- Nodes laid out by spring forces reveal clusters, bridges, and outliers that tabular output hides; entity types are color-coded; clicking a node shows its full metadata and relationships.
+- **What to Look For** -- Duplicate nodes with slight name variations (dedup failures), high-degree hubs that may represent under-specified entity types, disconnected components suggesting extraction gaps, and relationships with low confidence clustered by source.
+- **Visualization as Pipeline Signal** -- Unexpectedly long evidence spans or malformed relationship metadata often surface first as visual anomalies -- a sprawling hub where there should be none, or a cluster of nodes that should have resolved to one.
 
 ### Chapter 10: Design Priorities
 
@@ -120,28 +126,29 @@ This chapter examines key design decisions before building, particularly provena
 
 ### Chapter 11: The Identity Server
 
-The pipeline's view of the identity server: what to call, what comes back, and what provisional entities mean for the pipeline. Full architecture is in the companion volume *The Identity Server*.
+Shallow treatment -- full architecture is in the companion volume *The Identity Server: Canonical Identity for Knowledge Graphs*.
 
 - **Identity Is Load-Bearing** -- Canonical entities with canonical IDs are what separate a useful graph from sophisticated extraction; everything else is in service of identity.
-- **The Pipeline's View** -- The ingest stage calls `resolve(mention, entity_type)` as a black box and receives a stable ID; provisional IDs are valid graph nodes that participate fully.
+- **The Pipeline's View** -- The ingest stage calls the identity server as a black box: given a mention and entity type, it returns a stable ID (canonical if an authority matched, provisional otherwise). Provisional IDs are valid graph nodes; the pipeline does not handle them specially.
 - **Provenance-Derived Entities and the Citation Graph** -- Papers, authors, and citations from document metadata enter with canonical IDs already known; the citation graph enables corpus expansion and surfaces the intellectual neighborhood of the corpus.
 
 ### Chapter 12: The Ingestion Pipeline
 
-- **Why Multiple Passes at All** -- Multiple stages provide isolation, recoverability, debuggability, and natural units of work (per-document bundles).
-- **Parsing: Getting to Text** -- Extract structured text from source formats; preserve section boundaries for semantic weight.
+- **The Framework's Five Abstractions** -- The `kgraph` pipeline defines five pluggable interfaces, each implemented per domain: `DocumentParserInterface` (raw bytes → structured document), `EntityExtractorInterface` (document → entity mentions), `EntityResolverInterface` (mentions → canonical or provisional entities), `RelationshipExtractorInterface` (document + resolved entities → relationships), and bundle export (entities + relationships → kgbundle format). Domain code implements these; the framework orchestrates them.
+- **Why Two Passes** -- Resolving entities in Pass 1 produces a stable, deduplicated vocabulary before Pass 2 runs. Pass 2 (relationship extraction) refers to canonical entity IDs rather than raw text spans, which improves consistency and enables cross-document linking. Separation also provides isolation, recoverability, and debuggability.
+- **Parsing: Getting to Text** -- Extract structured text from source formats; preserve section boundaries for semantic weight and provenance. (medlit: JATS/PMC XML parser; sherlock: plain text, one document per story.)
 - **Extraction: The LLM Pass** -- At minimum one prompt per document; staging into multiple focused calls is often worth the added complexity. Either way, the prompt must be grounded in the schema -- entity types and predicates injected from the domain spec so the model works within a closed vocabulary.
   - **What every extraction prompt needs** -- the closed entity-type list; the predicate list with domain/range guidance (to reach for specific predicates over generic ones like `ASSOCIATED_WITH`); corpus vocabulary as preferred names (to suppress surface variation before deduplication); domain instructions for classification edge cases and output format.
   - **The closed-world constraint** -- every relationship subject and object must be an ID from the entities extracted in the same response. The model cannot assert a relationship involving a participant it didn't also classify and type.
   - **Staging tradeoffs** -- one combined call is simpler and often sufficient; splitting (entities first, then relationships over the resolved set) reduces hallucination surface at the cost of latency. Ancillary metadata (study design, author affiliations) belongs in separate lightweight calls.
   - **Required output contract** -- per entity: local ID, type, surface name, synonyms, authority ID hints; per relationship: subject ID, predicate, object ID, evidence span ID, confidence, linguistic trust (`asserted` / `suggested` / `speculative`); per evidence span: passage text, section, paragraph index.
-  - **Example prompt** -- Appendix B shows an abstracted version of the medlit extraction prompt, illustrating how entity types, predicates, and vocabulary slot into a template. A starting point for readers implementing their own schema.
-- **Vocabulary: Building a Shared Terminology** -- Optional dedicated pass that builds a shared vocabulary and injects it into extraction for consistency.
-- **Deduplication** -- Group mentions, resolve to canonical forms; authority lookup handles many cases; embedding and co-occurrence help with residue.
-- **Assembly** -- Merge per-document extractions; aggregate evidence across sources; design bundle structure carefully.
-- **Progress Tracking and Resumability** -- Design for large-scale runs that fail partway; checkpointing and resumability prevent restart overhead.
-- **Stages** -- Fetch, Extract, Ingest (with identity resolution), and Build Bundle; Postgres work queue with `SKIP LOCKED` for distribution.
-- **Work Queue, Artifact Files, and Reference Implementation** -- Full implementation notes for Postgres, per-paper JSON artifacts, parallelism strategy, and batch invocation.
+  - **Example prompt** -- Appendix A shows an abstracted version of the medlit extraction prompt, illustrating how entity types, predicates, and vocabulary slot into a Jinja2 template. A starting point for readers implementing their own schema.
+- **Vocabulary: Building a Shared Terminology** -- Optional dedicated pass (`fetch_vocab` in medlit) that builds a shared vocabulary and injects it into extraction for consistency across papers. Not framework-level; a medlit-specific optimization for large corpora.
+- **Deduplication** -- Group mentions, resolve to canonical forms; the synonym cache handles most cases; embedding similarity (cosine, via the `EmbeddingGeneratorInterface`) handles residue.
+- **Assembly and Bundle Export** -- Merge per-document extractions; aggregate evidence across sources; export to kgbundle format (manifest + `entities.jsonl` + `relationships.jsonl`). The bundle is the contract between the ingestion pipeline and the query layer; both sides are versioned against the `kgbundle` schema.
+- **Progress Tracking and Resumability** -- Design for large-scale runs that fail partway; checkpointing and resumability prevent restart overhead. (medlit uses per-paper JSON artifact files written atomically with write-then-rename; a Postgres work queue with `SKIP LOCKED` distributes work across parallel workers.)
+- **Concurrency Model** -- Each pipeline stage has its own concurrency limit; stages are bottlenecked independently. The work queue approach (one row per document, `SELECT ... FOR UPDATE SKIP LOCKED`) allows multiple workers to claim and process documents without coordination overhead.
+- **medlit Concrete Stages** -- Fetch (download PMC XML), Extract (entity pass), Ingest (relationship pass + identity resolution), Build Bundle; each a Python module invoked via `uv run`. The sherlock pipeline is simpler (no fetch, no authority lookup) but uses the same interface structure.
 
 ---
 
@@ -149,7 +156,7 @@ The pipeline's view of the identity server: what to call, what comes back, and w
 
 ### Chapter 13: What Your Graph Can Do
 
-- **The Server Is Not the Point** -- Graph capabilities are independent of serving layer; REST, GraphQL, MCP, or custom APIs all work.
+- **The Serving Layer Is Not the Point** -- Graph capabilities are independent of serving layer; REST, MCP, or custom APIs all work; the graph is the data structure, the server is a delivery mechanism.
 - **Direct Querying** -- Entity lookup, relationship queries, traversal; design primitives that map to domain questions.
 - **Graph Visualization** -- Force-directed visualization reveals structure, clusters, bridges, and outliers better than tabular output.
 - **Grounding LLM Inference** -- Instead of asking the model to remember, give it retrieved graph to reason over; shifts from "hallucination" to "synthesis from sources."
@@ -190,18 +197,9 @@ The pipeline's view of the identity server: what to call, what comes back, and w
 
 ---
 
-## Appendix A: BFS Query Language Reference
+## Appendix A: Reference Implementation Notes
 
-Reference for the breadth-first search query language designed for LLM-friendly graph traversal.
-
-- **Query Format** -- `seeds`, `max_hops`, `node_types`, `predicates`, `topology_only` parameters for breadth-first subgraph retrieval.
-- **Response Format** -- Full nodes (metadata), stub nodes (ID only), full edges (provenance), stub edges (topology) structure and examples.
-- **LLM Prompt Template** -- Template for instructing LLMs to construct BFS queries with three worked examples.
-- **Design Considerations** -- Topology and presentation orthogonality, why stubs over omission, edge provenance cost, multiple seeds for relational queries, independent filter composition, and BFS depth guidance.
-
-## Appendix B: Reference Implementation Notes
-
-Implementation guidance for the medlit ingestion pipeline. Identity server specification (Python ABC, domain plugin contract, Postgres schema, Docker setup) is in the companion volume *The Identity Server*, Appendix A and B.
+Implementation guidance for the medlit ingestion pipeline. The BFS-QL query language spec is in the companion volume *BFS-QL: Graph Queries for Language Models*. The identity server spec is in the companion volume *The Identity Server: Canonical Identity for Knowledge Graphs*.
 
 - **Ingestion Pipeline: Work Queue** -- Postgres `ingest_jobs` table structure for distributed work claiming with `SKIP LOCKED`.
 - **Paper Artifact Files** -- Atomic write-then-rename strategy; serves recovery, auditability, and retraction purposes.
@@ -209,5 +207,5 @@ Implementation guidance for the medlit ingestion pipeline. Identity server speci
 - **Batch Ingestion** -- Shell script orchestrating four stages; each stage as a Python module invoked via `uv run`.
 - **MCP Tool** -- Single-paper convenience for interactive queries; calls same pipeline stages as batch CLI.
 - **Extraction Output Format** -- JSON artifact structure: mentions with locations, relationships with evidence locations, no IDs (assigned post-extraction by identity server).
-- **Shared Pipeline Code** -- `_run_pass2_pass3_load` shared between batch and MCP paths.
+- **Shared Pipeline Code** -- Functions shared between batch and MCP paths.
 - **Extraction Prompt Template** -- Abstracted Jinja2 template with three injection points (`{{ entity_types }}`, `{{ predicates }}`, `{{ vocab_section }}`), the closed-world subject/object constraint, linguistic trust classification, and evidence ID format. Medlit domain instructions shown as a worked example of encoding entity classification rules and predicate guidance for a specific domain.
